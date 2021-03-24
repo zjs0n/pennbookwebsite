@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+      <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+      <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+      <!--stylesheet-->
+      <link type="text/css" href="../css/base.css" rel="stylesheet" />
+      <!--font stylesheet-->
+      <link rel="preconnect" href="https://fonts.gstatic.com">
+      <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap" rel="stylesheet">
+        <meta charset="UTF-8">
+        <meta name ="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+
+             .details {
+                 color: rgb(133, 128, 128);
+                 font-size: 16px;
+             }
+
+             .wrapper {
+                padding: 0 1rem;
+                margin-top:80px;
+                margin-bottom:10px;
+            }
+
+            .feed {
+                margin-top: 20px;
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(550px, 1fr));
+                grid-gap: 2rem;
+
+            }
+
+        </style>
+        <script>
+            function validate(term) {
+              var searchString = term.value;
+              if (searchString.length > 0 && searchString.match(/^[A-Za-z ]+$/)) {
+                return true;
+              } else {
+                alert("Words must be purely alphabetic");
+                var event = window.event;
+                event.stopPropagation();
+                event.preventDefault();
+
+                document.searchForm.keyword.focus();
+                return false;
+              }
+            }
+
+            var originalLoad = function() {
+              $.ajax({
+                type: "GET",
+                url: "/getNewsToday",
+                success: function(result) {
+                  result = result.data;
+                  var header = `<h2> Today's 15 Trending News </h2>`;
+                  var feed = document.getElementById("feed");
+                  var wrapper = document.getElementById("wrapper");
+                  //clear any initial metadata that comes
+                  while (feed.firstChild) {
+                    feed.removeChild(feed.firstChild);
+                  }
+                  wrapper.removeChild(wrapper.firstChild);
+                  $("#wrapper").prepend(header);
+
+                  for (i = 0; i < 15; i++) {
+                    var item = result[i];
+
+                    var image = `<img id = ${item.id} alt = "Image not available" src = "https://img.huffingtonpost.com/asset/default-entry.jpg?ops=1778_1000"> `
+                      var headline = `<h2 id= "headline" class = "headline">
+                                        <a href=${item.link} id = "newsLink" class = "head" style="text-decoration: none" >${item.headline}</a>
+                                     </h2>`;
+
+                      var authors =  `<p id = "authors" class = "details">${item.authors} | ${item.date}</p>`
+                      var description = `<p id = "description" class = "short_description">${item.description.replace(/\\/g, '')}</p>`
+
+                      jQuery('<div/>', {
+                        id: 'newsCard',
+                        "class": 'card',
+                        style: "text-decoration:none"
+                      }).appendTo('#feed')
+                        .append(image, headline, authors, description);
+                  }
+                  $.ajax({
+                      type: "POST",
+                      url: "/articleImages",
+                      data: {"info" : JSON.stringify(result)},
+                      success: function(result) {
+                        result = JSON.parse(result).data;
+                        result.forEach(item => {
+                          if (item.image) {
+                            var doc = document.getElementById(item.id)
+                            if (doc) {
+                              doc.src = item.image;
+                            }
+
+                          }
+                        })
+
+                      }
+                    });
+                }
+              });
+            }
+
+            var submit = function() {
+              var searchWord = document.getElementById("keyword").value;
+              console.log(searchWord);
+              $.ajax({
+                  type: "POST",
+                  url: "/article",
+                  data: $("#searchForm").serialize(),
+                  success: function(result) {
+                    $("#searchForm")[0].reset();
+                    var data = JSON.parse(result).data;
+                    console.log(data);
+                    var header = `<h2> Displaying ${data.length} results for <span style = "font-weight:bold"> ${searchWord} </span> </h2>`;
+                    var feed = document.getElementById("feed");
+                    var wrapper = document.getElementById("wrapper");
+                    //clear any initial metadata that comes
+                    while (feed.firstChild) {
+                      feed.removeChild(feed.firstChild);
+                    }
+                    wrapper.removeChild(wrapper.firstChild);
+                    $("#wrapper").prepend(header);
+                    data.forEach(item => {
+                      var image = `<img id = ${item.id} alt = "Image not available" src = "https://img.huffingtonpost.com/asset/default-entry.jpg?ops=1778_1000"> `
+                      var headline = `<h2 id= "headline" class = "headline">
+                                        <a href=${item.link} id = "newsLink" class = "head" style="text-decoration: none" >${item.headline}</a>
+                                     </h2>`;
+
+                      var authors =  `<p id = "authors" class = "details">${item.authors} | ${item.date}</p>`
+                      var description = `<p id = "description" class = "short_description">${item.description.replace(/\\/g, '')}</p>`
+
+                      jQuery('<div/>', {
+                        id: 'newsCard',
+                        "class": 'card',
+                        style: "text-decoration:none"
+                      }).appendTo('#feed')
+                        .append(image, headline, authors, description);
+                    });
+                    if (data.length < 300) {
+                      var temp = data;
+                      $.ajax({
+                      type: "POST",
+                      url: "/articleImages",
+                      data: {"info" : JSON.stringify(temp)},
+                      success: function(result) {
+                        result = JSON.parse(result).data;
+                        result.forEach(item => {
+                          if (item.image) {
+                            document.getElementById(item.id).src = item.image;
+                          }
+                        })
+
+                      }
+                      });
+                    }
+                },
+                error: function(result) {
+                  alert('Error in loading news feed');
+                }
+              });
+            }
+
+          var searchForm = function() {
+            $("#searchButton").click(function(e) {
+                e.preventDefault();
+                submit();
+            });
+
+            $('#searchForm').submit(function(e) {
+              e.preventDefault();
+              submit();
+            });
+          }
+
+          $(document).ready(function() {
+            originalLoad();
+            searchForm();
+          });
+          </script>
+    </head>
+    <body>
+      <nav class="navbar navbar-expand-sm fixed-top navbar-dark bg-primary">
+        <a class="navbar-brand" id="logo" href="/">
+          <img src="https://branding.web-resources.upenn.edu/sites/default/files/UniversityofPennsylvania_Shield_RGB.png" width="30px" class="d-inline-block align-top" alt=""> PennBook
+        </a>
+        <form class="form-inline" id = "searchForm" name="searchForm">
+          <input id = "keyword" class="form-control mr-sm-2" name = "keyword" type="text" placeholder="Search news...">
+          <button id = "searchButton" class="btn btn-outline-light" type="button">Search</button>
+        </form>
+        <ul class="navbar-nav ml-md-auto">
+          <li class="nav-item"><a class="nav-link" href="/chat">Chat</a></li>
+          <li class="nav-item"><a class="nav-link" href="/news">News</a></li>
+          <li class="nav-item"><a class="nav-link" href="/friends">Friends</a></li>
+          <li class="nav-item"><a class="nav-link" href="/wall/<%= user %>">Profile</a></li>
+          <li class="nav-item">
+            <form action="/logout">
+              <input class="btn btn-outline-light" type="submit" href="/logout" id="logoutButton" value="Logout">
+            </form>
+          </li>
+        </ul>
+      </nav>
+
+      <div id = "wrapper" class="wrapper">
+
+        <div id = "feed" class = "feed">
+        </div>
+      </div>
+
+
+
+
+
+    </body>
+
+</html>
