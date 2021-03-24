@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+
+      body {
+        height:100%;
+        display:grid;
+        justify-items:center;
+        align-items:center;
+        font-family: 'Roboto', sans-serif;
+      }
+
+      h2 {
+        font-size: 18px;
+        margin-bottom: 1em;
+        margin-top: 1em;
+      }
+
+      .row {
+        height: 100vh;
+      }
+
+      .signup-margin {
+        margin-left: 1em;
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+      }
+
+      .bot-margin {
+        margin: 0.5em;
+      }
+
+      .tab {
+        display: none;
+      }
+
+      #errorMessage {
+        color:red;
+        font-weight:bold;
+      }
+
+      #showPasswordLabel {
+        margin-top: 5px;
+      }
+
+    </style>
+  </head>
+<body class="bg-light">
+  <div class="container">
+    <div class="row justify-content-center align-items-center">
+      <div class="col-6">
+        <div class="card">
+          <div class="card-body">
+            <h1>PennBook</h1>
+            <h2 class="text-secondary">Login</h2>
+            <form action="/login" method="post" id="form">
+              <div class="form-group">
+                <input class="form-control" type="text" id="username" name="username" placeholder="Username" required>
+              </div>
+              <div class="form-group">
+                <input class="form-control" type="password" id="password" name="password" placeholder="Password" required>
+                <div class="form-check text-secondary" id="showPasswordLabel">
+                  <input class="form-check-input" type="checkbox" id="passwordShow" name="passwordShow" onclick="showPassword()">
+                  <label class="form-check-label" for="passwordShow">
+                    Show Password
+                  </label>
+                </div>
+              </div>
+              <div class="form-group form-row">
+                <input class="btn btn-primary" type="submit" id="submit" value="Submit">
+                <p class="signup-margin text-secondary">New to PennBook? <a href="/register">Sign up here.</a></p>
+              </div>
+            </form>
+            <% if(locals.error) { %>
+              <p class="text-danger" id="errorMessage"><%= error %></p>
+            <%} %>
+          </div>
+        </div>
+        <p class="text-secondary bot-margin">Created by G08</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showPassword() {
+      var password = document.getElementById("password");
+      console.log("yay");
+      if (password.type === "text") {
+        password.type = "password";
+      } else {
+        password.type = "text";
+      }
+    }
+  </script>
+</body>
+</html>
