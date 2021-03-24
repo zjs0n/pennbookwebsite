@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <script src="https://unpkg.com/react/umd/react.production.min.js" crossorigin></script>
+    <!--stylesheet-->
+    <link type="text/css" href="../css/base.css" rel="stylesheet" />
+    <!--font stylesheet-->
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap" rel="stylesheet">
+    <!--<script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>-->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        //chat edits
+    var socket = io();
+    var roomState = false;
+    var currentlogin;
+    var jsondata;
+    var obj;
+    var fullname = "<%= namefull %>";
+    var imagePost = false;
+    var wrapper;
+    var inputBox;
+    var dropBox;
+    //keeps track of the users online in the previous refresh
+    var oldArray = [];
+    //keeps track of the previous friends from the prior refresh
+    var oldFriends = [];
+
+    $.get("/currentlogindata", function(data, status) {
+        jsondata = JSON.stringify(data);
+        obj = JSON.parse(jsondata);
+        console.log(obj.currentUser);
+        currentlogin = obj.currentUser;
+        console.log('final: ' + currentlogin);
+        socket.emit("currentUser", {currentUser: currentlogin});
+    })
+    //checking for invite
+    socket.on("chat invite", function(invite) {
+                console.log(invite);
+                if (invite.chatroom.includes(currentlogin)) {
+                    //alert("someone wants to chat with you!");
+                    var request = document.createElement("li");
+                    request.className="list-group-item";
+                    request.id = invite.chatroom;
+                    var inviter = String(invite.chatroom).replace(currentlogin, "");
+                    //inviter.replace(currentlogin, "");
+                    //inviter.replace(",", "");
+                    request.innerHTML=inviter;
+                    var acceptbutton = document.createElement("button");
+                    acceptbutton.className= "chatAccept btn btn-outline-primary btn-sm btn-block";
+                    acceptbutton.name=invite.chatroom;
+                    acceptbutton.innerHTML="Accept";
+                    var rejectbutton = document.createElement("button");
+                    rejectbutton.className="chatDeny btn btn-outline-danger btn-sm btn-block";
+                    rejectbutton.name=invite.chatroom;
+                    rejectbutton.innerHTML="Deny";
+                    request.appendChild(acceptbutton);
+                    request.appendChild(rejectbutton);
+                    $("#chatrequests").append(request);
+
+                    //accept chat request
+                    $(document).on("click", ".chatAccept", function() {
+                    //alert("accept button is clicked");
+                    //console.log("JUST CHECKING: " + this.name);
+                    //localStorage.setItem('chatroomID', this.name);
+                    //console.log(localStorage.getItem('chatroomID'));
+                    console.log("click output run");
+                    console.log(this.name);
+                    console.log(typeof this.name);
+                    var input = this.name;
+                    console.log(input);
+                    $.post("/addchatlist", {chattingroomID: this.name, user: currentlogin}, function(data){
+                        console.log(data);
+                        console.log("finished with the job");
+                        socket.emit('join room', {chatroom: this.name});
+                        $("#"+this.name).remove();
+                    });
+                    
+                    socket.emit('accept invite', {
+                        chatroom : invite.chatroom,
+                        acceptor : currentlogin
+                    });
+                    location.href = '/chat';
+                });
+
+                //reject chat request
+                $(document).on("click", ".chatDeny", function() {
+                    socket.emit("deny invite", {
+                        chatroom : invite.chatroom,
+                        rejector : currentlogin
+                    });
+                    $("#"+this.name).remove();
+                });
+
+                }
+            });
+    //checking for group invites
+    socket.on("group chat invite", function(invite) {
+        console.log("group chat invitation received");
+        console.log(invite.chatroom);
+        if (invite.invited.includes(currentlogin)) {
+                                //alert("someone wants to chat with you!");
+                                var request = document.createElement("li");
+                    request.className="list-group-item";
+                    request.id = invite.chatroom;
+                    var inviter = String(invite.chatroom).replace(currentlogin, "");
+                    //inviter.replace(currentlogin, "");
+                    //inviter.replace(",", "");
+                    request.innerHTML=inviter;
+                    var acceptbutton = document.createElement("button");
+                    acceptbutton.className= "chatAccept btn btn-outline-primary btn-sm btn-block";
+                    acceptbutton.name=invite.chatroom;
+                    acceptbutton.innerHTML="Accept";
+                    var rejectbutton = document.createElement("button");
+                    rejectbutton.className="chatDeny btn btn-outline-danger btn-sm btn-block";
+                    rejectbutton.name=invite.chatroom;
+                    rejectbutton.innerHTML="Deny";
+                    request.appendChild(acceptbutton);
+                    request.appendChild(rejectbutton);
+                    $("#chatrequests").append(request);
+
+                    //accept chat request
+                    $(document).on("click", ".chatAccept", function() {
+                    //alert("accept button is clicked");
+                    //console.log("JUST CHECKING: " + this.name);
+                    //localStorage.setItem('chatroomID', this.name);
+                    //console.log(localStorage.getItem('chatroomID'));
+                    console.log("click output run");
+                    console.log(this.name);
+                    console.log(typeof this.name);
+                    var input = this.name;
+                    console.log(input);
+                    $.post("/addchatlist", {chattingroomID: this.name, user: currentlogin}, function(data){
+                        console.log(data);
+                        console.log("finished with the job");
+                        socket.emit('join room', {chatroom: this.name});
+                        $("#"+this.name).remove();
+                    });
+
+                    socket.emit('accept group invite', {
+                        chatroom : invite.chatroom,
+                        acceptor : invite.invitee
+                    });
+                    location.href = '/chat';
+                });
+
+                //reject chat request
+                $(document).on("click", ".chatDeny", function() {
+                    socket.emit("deny invite", {
+                        chatroom : invite.chatroom,
+                        rejector : invite.invitee
+                    });
+                    $("#"+this.name).remove();
+                });
+
+            }
+        });
+    var updateHome = function() {
+      var loadUserID = "<%= curr %>";
+      $.get('/updateHome', function(data) {
+          var data = JSON.parse(data);
+          var friends = data.data.friends;
+          var requests = data.data.received_requests;
+
+          var friendReqs = document.getElementById("requestsList");
+          while (friendReqs.firstChild) {
+            friendReqs.removeChild(friendReqs.firstChild);
+          }
+          if (requests === undefined || Object.keys(requests).length == 0) {
+            friendReqs.innerHTML='<li class="list-group-item"><p class="text-secondary">No pending friend requests</p></li>'
+          } else {
+            Object.keys(requests).forEach(request => {
+              var requestItem = document.createElement("li");
+              requestItem.innerHTML = requests[request] + '<button class="acceptRequest btn btn-outline-primary btn-sm btn-block" name="'
+                + request + '">Accept</a><button class="denyRequest btn btn-outline-danger btn-sm btn-block" name="'
+                + request + '">Deny</a>';
+              requestItem.className = "list-group-item";
+              requestItem.id = request + "-friend-request";
+              friendReqs.appendChild(requestItem);
+            });
+          }
+          $.get('/onlineusers', function(data) {
+            info = JSON.parse(data).info;
+            console.log(info);
+            var diff1 = info.filter(x => !oldArray.includes(x));
+            var diff2 = oldArray.filter(x => !info.includes(x));
+            var diff3 = oldFriends.filter(x => !Object.keys(friends).includes(x));
+            var diff4 = Object.keys(friends).filter(x => !oldFriends.includes(x));
+            console.log(diff3);
+            console.log(diff4);
+            if (diff1.length > 0 || diff2.length > 0 || diff3.length > 0 || diff4.length > 0) {
+                var friendsDiv = document.getElementById("friendsList");
+                while (friendsDiv.firstChild) {
+                    friendsDiv.removeChild(friendsDiv.firstChild);
+                }
+                if (friends === undefined || Object.keys(friends).length == 0) {
+                    friendsDiv.innerHTML='<li class="list-group-item"><p class="text-secondary">No friends</p></li>'
+                } else {
+                    Object.keys(friends).forEach(friend => {
+                        console.log('friends are');
+                        console.log(friends);
+                        var friendItem = document.createElement("li");
+                        var proPic = document.createElement("img");
+                        proPic.className = `icon pic${friend}`;
+                        friendItem.appendChild(proPic);
+                        if (data.includes(friend)) {
+                            friendItem.innerHTML += '<div class="online bg-success"></div>' + friends[friend].name;
+                        } else {
+                            friendItem.innerHTML += friends[friend].name;
+                        }
+                        friendItem.className = "list-group-item";
+                        friendItem.id = friend;
+                        friendsDiv.appendChild(friendItem);
+                    });
+                }
+            }
+            oldArray = info;
+            oldFriends = Object.keys(friends);
+          });
+
+          var profileURL = "";
+          $.get("/allusers", function(data) {
+            data = JSON.parse(data).data;
+            data.forEach(item => {
+                profileURL = item.profileURL;
+                var elements = document.getElementsByClassName(`pic${item.username}`);
+                for (var i = 0; i < elements.length; i++) {
+                    elements.item(i).src = profileURL;
+                }
+
+            })
+
+        });
+      });
+      setTimeout(updateHome, 2000);
+    }
+
+    var loadFile = function(event) {
+        //ensures only one image is posted
+        if (!imagePost) {
+            console.log('load file on event');
+             $('#postbar').append(`<div id = picContainer>
+                                <button type="button" id="closepic" onclick="cameraOff()" class="close" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                <img id = "postpic" src = ${URL.createObjectURL(event.target.files[0])}>
+                            </div>`)
+            console.log(event.target.files[0]);;
+            imagePost = true;
+            console.log('this is image post' + imagePost);
+        }
+
+    };
+
+    function cameraOff() {
+        console.log('being clicked');
+        $("#file").val('');
+        $('div').remove('#picContainer');
+        imagePost = false;
+    }
+
+
+    function sendChat(data) {
+        console.log("chatting...");
+        console.log(Date.now().toString());
+        console.log(JSON.stringify(currentlogin));
+            console.log("JOINED!!!");
+        if ($('#input').val().trim() !== ' ') {
+            socket.emit('join room', {
+                msgtext: $('#input').val(),
+                sender: currentlogin, //NO HARD CODE
+                chatroom: "jasonJoe", //THIS MUST CHANGE CAN"T BE HARDCODED
+                time: Date.now()
+            });
+            socket.emit('chat message', {
+                msgtext: $('#input').val(),
+                sender: currentlogin, //NO HARD CODE
+                chatroom: "jasonJoe", //THIS MUST CHANGE CAN"T BE HARDCODED
+                time: Date.now()
+            });
+            console.log("MESSAGE SENT!");
+            $('#input').val(' ');
+            $('#input').focus();
+        }
+    //$("#chatmsg").append($('<li>').text(msg.msgtext));
+    }
+    	// keeps track of which posts are currently on display 
+		var postIdList = [];
+        var currUser;
+        // indicates if the page is loading for the first time or not
+        var start = true;
+        var running = false;
+        //checks if the article data has been updated for today
+        var articleUpdate = false;
+
+        var friendList = [];
+        var friends;
+
+        var indexNews = function() {
+            console.log('indexing news');
+            $.get('/indexnews', function(data) {
+                articleUpdate = true;
+            });
+        }
+
+		var id;
+        $(document).ready(function() {
+          wrapper = document.querySelector(".search");
+          inputBox = wrapper.querySelector("input");
+          dropBox = wrapper.querySelector(".dropdown");
+          //friend requests accept
+          $("#requestsList").on("click", ".acceptRequest", function(e) {
+            e.preventDefault();
+            var senderID = $(this).attr("name");
+            $.ajax({
+              type: "POST",
+              url: "/addfriend",
+              data: {receiver: "<%= curr %>", sender: senderID},
+              success: function(result) {
+                  var content = {receiver: "<%= curr %>", sender: senderID};
+                  $.ajax({
+                      type:"POST",
+                      url: "/friendpost",
+                      data: content,
+                      success: function(result) {
+                          'succesfully made a friend post';
+                      }
+                  });
+                  $.ajax({
+                    type: "POST",
+                    url: "/deleterequest",
+                    data: {receiver: "<%= curr %>", sender: senderID},
+                    success: function(result) {
+                        document.getElementById(senderID + "-friend-request").classList.add("text-secondary");
+                        document.getElementById(senderID + "-friend-request").innerHTML =
+                          "You are now friends with " + senderID;
+                    },
+                    error: function(result) {
+                        alert('Error accepting request');
+                    }
+                  });
+              },
+              error: function(result) {
+                  alert('Error accepting request');
+              }
+            });
+          });
+
+          $("#requestsList").on("click", ".denyRequest", function(e) {
+            e.preventDefault();
+            console.log($(this).attr("name"));
+            var senderID = $(this).attr("name");
+            $.ajax({
+              type: "POST",
+              url: "/deleterequest",
+              data: {receiver: "<%= curr %>", sender: senderID},
+              success: function(result) {
+                document.getElementById(senderID + "-friend-request").classList.add("text-secondary");
+                document.getElementById(senderID + "-friend-request").innerHTML =
+                  "Declined friend request from " + senderID;
+              },
+              error: function(result) {
+                  alert('Error declining request');
+              }
+            });
+          });
+
+          // initiates the timeout for dynamically updating any changes for the posts
+           refreshPage();
+           updateHome();
+
+           $('[data-toggle="tooltip"]').tooltip();
+           $("[name='lastcol']").addClass("fullWidth");
+           $("#friendlogo").click(function () {
+               console.log("this stage");
+           });
+           //chat socket on
+           /*socket.on("chat message", function(msg) {
+               $.post("/newmessage", {newMessage : msg}, function(data) {
+                        $("#chatmsg").append($('<li>').text(msg.msgtext));
+                        //see if chat query works
+                        $.post('/output', {newMessage : msg}, function(data) {
+                        console.log("query chat is...");
+                        var jsonconversion = JSON.stringify(data);
+                        var output = JSON.parse(jsonconversion);
+                        console.log(output);
+                        });
+
+               });*/
+
+            // displays all the comments for the post
+            $(".post").on('click', '#commentButton', function() {
+                $(this).closest('.card').find(".commentInput").first().slideToggle("slide");
+            });
+
+            // updates the like_list, which contains list of users that has liked the post, and increments/decrements like counter
+            $(".post").on('click', '#likebutton', function() {
+                var likeList = $(this).attr("likeList");
+
+                var creator = $(this).attr("creator");
+                var receiver = $(this).attr("receiver");
+
+                var newList = likeList.split(",");
+                var count = parseInt($(this).find("span").first().text());
+                var unlike = "false";
+                if (newList.includes(currUser)) {
+                    console.log('inside user already liked');
+                    console.log(count);
+                    var index = newList.indexOf(currUser);
+                    newList.splice(index, 1);
+                    $(this).attr("likeList", newList);
+                    count --;
+                    unlike = "true";
+                    $(this).removeClass('btn btn-primary').addClass('btn btn-outline-primary');
+                } else {
+                    newList.push(currUser);
+                    $(this).attr("likeList", newList);
+                    count++;
+                    $(this).removeClass('btn btn-outline-primary').addClass('btn btn-primary');
+                }
+                //if (count % 2 === 1) {
+                    $(this).find("span").text(count);
+
+                /*} else {
+                    likeNums = likeNums - 1;
+                    $("[name='like']").find("span").text(likeNums);
+                    $("[name='like']").removeClass('btn btn-primary').addClass('btn btn-outline-primary');
+                }*/
+
+                var postId = $(this).attr("postId");
+                var wallId = $(this).attr("wallId");
+
+                if ($(this).attr("news")) {
+                    var post = {
+                        'post_id': postId,
+                        'wall_id': wallId,
+                        'id': $(this).attr("news"),
+                        'count': count,
+                        'unlike': unlike
+                    }
+                    $.post('/articleLikes', post, function(data) {
+                        if (data.error !== undefined) {
+                             alert(`${data.error}`);
+                         }
+                    });
+                }
+                else {
+                    var post = {
+                    'post_id': postId,
+                    'wall_id' : creator,
+                    'like' : count,
+                    'user': currUser,
+                    "unlike": unlike
+                    };
+
+                    $.post("/addpost?msg=3", post, function(data) {
+                        if (data.error !== undefined) {
+                             alert(`${data.error}`);
+                         }
+                    });
+
+                    var post2 = {
+                    'post_id': postId,
+                    'wall_id' : receiver,
+                    'like' : count,
+                    'user': currUser,
+                    "unlike": unlike
+                    };
+
+                    $.post("/addpost?msg=3", post2, function(data) {
+                        if (data.error !== undefined) {
+                             alert(`${data.error}`);
+                         }
+                    });
+                }
+
+            });
+
+            // handles any addition of comments/subcomments for each post
+            $(".posts").on('click', '#update', function() {
+                var dateObj = new Date();
+                var result = Math.floor(dateObj.getTime() / 1000.0);
+                var parent = $(this).closest('div').find("#newPost").first().attr("name");
+                var content = $(this).closest('div').find("#newPost").first().val();
+                $(this).closest('div').find("#newPost").first().val("");
+                var wallId = $(this).closest('div').find("#newPost").first().attr("wallId");
+                var receiver = $(this).closest('div').find("#newPost").first().attr("receiver");
+                var creator = currUser;
+                var date = dateObj.toISOString();
+                var type = $(this).closest('div').find("#newPost").first().attr("postType");
+                let day = dateObj.getDate();
+                var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                var year = dateObj.getFullYear();
+                var month = dateObj.getMonth() + 1;
+                var hour = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+                // prints date & time in YYYY-MM-DD format of today's date
+                var time = month + '/' + day + '/' + year;
+		        var comment = {
+					'content': content,
+					'creator': creator,
+					'receiver': receiver,
+					'date': date,
+					'type': type,
+					'post_id': result,
+					'parent' : parent,
+					'wall_id' : wallId
+				};
+
+				var commentHtml;
+				var className = "." + parent;
+				if (type === "subcomment") {
+                    commentHtml = `<div class=${result}>
+                                      <div style="border-radius: 15px" class="card-body bg-light my-2 ml-5 mr-4 pt-4">
+                                          <h6 id="commentName"><span><img class = \"icon pic${creator}\"src=\"\"></span>${fullname} <span id="date">${time} </span></h6>
+
+                                              <div>
+                                                  ${content}
+                                              </div>
+                                              <br>
+                                          <input style="padding:4px 10px; line-height:80%;" id="newPost" type="text" class="form-control input-sm" autocomplete="off" name=${parent} placeholder="Write a reply..." postType ="subcomment" wallId =${wallId} receiver =${receiver} required>
+                                          <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                              post
+                                          </button>
+                                          <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="subcomment" creator=${creator} postId=${result} wallId=${wallId} parent=${parent} type="button" class="btn btn-light my-1">
+                                              delete
+                                          </button>
+                                      </div>
+                                 </div>`;
+				    $( commentHtml ).insertAfter( $(document).find(className).find(".subcommentStart") );
+				    if ($(this).closest('.card').find(".commentInput").first().is(":hidden")) {
+				        $(this).closest('.card').find(".commentInput").first().slideToggle("slide");
+				    }
+				} else {
+				    commentHtml =  `<div class=${result}>
+                                        <div style="border-radius: 15px" class="card-body bg-light my-2 mx-4 p-3">
+                                            <h6 id="commentName"><span><img class = \"icon pic${creator}\"src=\"\"></span>${fullname} <span id="date">${time} </span></h6>
+
+                                            <p class="m-0">
+                                                ${content}
+                                            </p>
+                                            <br>
+                                            <input style="padding:4px 10px; line-height:80%;" id=newPost type="text" class="form-control" autocomplete="off" name=${result} placeholder="Write a reply..." postType ="subcomment" wallId =${wallId} receiver=${creator} required>
+                                            <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                                post
+                                            </button>
+                                            <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="comment" creator=${creator} postId=${result} wallId=${wallId} parent=${parent} type="button" class="btn btn-light my-1">
+                                                delete
+                                            </button>
+                                        </div>
+                                        <div class="subcommentStart">
+                                  </div>`;
+
+				    $( commentHtml ).insertAfter( $(document).find(className).find(".commentStart") );
+				    if ($(this).closest('.card').find(".commentInput").first().is(":hidden")) {
+                        $(this).closest('.card').find(".commentInput").first().slideToggle("slide");
+                    }
+				}
+
+				postIdList.push(result.toString());
+
+                $.post("/addpost", comment, function(data) {
+                        if (data.error !== undefined) {
+                             alert(`${data.error}`);
+                         }
+                });
+
+
+            });
+	
+			// handles deletion of posts/comments/subcomments
+             $(".posts").on('click', '#delete', function() {
+				var wallId = $(this).attr("wallId");
+				var postId = $(this).attr("postId");
+				var postType = $(this).attr("postType");
+				var creator = $(this).attr("creator");
+				var parent = $(this).attr("parent");
+				var receiver = $(this).attr("receiver");
+
+				var className = "." + postId;
+				if (creator !== currUser) {
+                    alert("You cannot edit this post.");
+                } else {
+                    if (confirm("Please confirm before deleting.") == true) {
+                        if (postType === "post") {
+                           var index = postIdList.indexOf(postId);
+                           postIdList.splice(index, 1);
+                            $(this).closest(className).remove();
+                            var comment1 = {
+                                'post_id': postId,
+                                'wall_id' : receiver,
+                                'parent' : parent,
+                                'type': postType
+                            };
+                            $.post("/addpost?msg=2", comment1, function(data) {
+
+                            });
+                        } else {
+                            var index = postIdList.indexOf(postId);
+                            postIdList.splice(index, 1);
+                            $(this).closest(className).remove();
+                        }
+
+                        var comment = {
+                            'post_id': postId,
+                            'wall_id' : wallId,
+                            'parent' : parent,
+                            'type': postType
+                        };
+                        $.post("/addpost?msg=2", comment, function(data) {
+                            if (data.error !== undefined) {
+                                 alert(`${data.error}`);
+                             }
+                        });
+                    }
+                }
+            });
+
+             // handles new posts for the users
+             $(".newPost").on('click', '#update', function() {
+
+                let ts = Date.now();
+                let date_ob = new Date(ts);
+                let day = date_ob.getDate();
+                var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                var year = date_ob.getFullYear();
+                var month = months[date_ob.getMonth()];
+                var hour = date_ob.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                var time = month + ' ' + day + ', ' + year + ' at ' + hour;
+
+                var dateObj = new Date();
+                var result = Math.floor(dateObj.getTime() / 1000.0);
+
+                id = result;
+                var parent = $(this).parent().parent().find("#makePost").first().attr("name");
+                var content = $(this).parent().parent().find("#makePost").first().val();
+                $(this).parent().parent().find("#makePost").first().val("");
+                var content = $(this).parent().parent().find("#makePost").first().html();
+                var wallId = $(this).parent().parent().find("#makePost").first().attr("wallId");
+                var receiver = $(this).parent().parent().find("#makePost").first().attr("receiver");
+                var creator = currUser;
+                let today = year + "-" + month + "-" + day;
+                var date = today;
+                //var date1 =  new Date;
+                var date2 = dateObj.toISOString();
+                var type = $(this).parent().parent().find("#makePost").first().attr("postType")
+
+		        if (type === "post") {
+		        	var htmlHeader = `<div class=${result}>
+                                                            <div class="card p-0">
+                                                                <div class="card-body bg-white border-bottom mx-2 pb-0 pt-4 border-0">
+                                                                <div class="text-right">
+                                                                    <button data-toggle="tooltip" title="Delete post" data-placement="top" style="position:absolute; color:#666565" id="delete" postType="post" receiver=${creator} creator=${currUser} postId=${result} wallId=${creator} type="button" class="btn pull-right btn-xs px-1 py-0 m-0">x</button>
+                                                                </div>`;
+                    htmlHeader += `     <h6 id="postName"><span><img class = \"icon pic${creator}\"src=\"\"></span>${fullname}</h6>
+                                                                        <h5 id="date" class="mb-4">${time} </h6>
+                                                                    `;
+
+                    var htmlContent = '<div>' + content + '</div></div>';
+
+
+                    var htmlComment = `<div class="wrapper">
+                                          <div>
+                                              <div class="card-body text-center">
+                                                      <button postId=${result} wallId= ${wallId} creator = ${creator} receiver = ${receiver} likeList="" name="like" type="button" class="btn btn-outline-primary" id="likebutton">
+                                                          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-hand-thumbs-up" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                              <path fill-rule="evenodd" d="M6.956 1.745C7.021.81 7.908.087 8.864.325l.261.066c.463.116.874.456 1.012.965.22.816.533 2.511.062 4.51a9.84 9.84 0 0 1 .443-.051c.713-.065 1.669-.072 2.516.21.518.173.994.681 1.2 1.273.184.532.16 1.162-.234 1.733.058.119.103.242.138.363.077.27.113.567.113.856 0 .289-.036.586-.113.856-.039.135-.09.273-.16.404.169.387.107.819-.003 1.148a3.163 3.163 0 0 1-.488.901c.054.152.076.312.076.465 0 .305-.089.625-.253.912C13.1 15.522 12.437 16 11.5 16v-1c.563 0 .901-.272 1.066-.56a.865.865 0 0 0 .121-.416c0-.12-.035-.165-.04-.17l-.354-.354.353-.354c.202-.201.407-.511.505-.804.104-.312.043-.441-.005-.488l-.353-.354.353-.354c.043-.042.105-.14.154-.315.048-.167.075-.37.075-.581 0-.211-.027-.414-.075-.581-.05-.174-.111-.273-.154-.315L12.793 9l.353-.354c.353-.352.373-.713.267-1.02-.122-.35-.396-.593-.571-.652-.653-.217-1.447-.224-2.11-.164a8.907 8.907 0 0 0-1.094.171l-.014.003-.003.001a.5.5 0 0 1-.595-.643 8.34 8.34 0 0 0 .145-4.726c-.03-.111-.128-.215-.288-.255l-.262-.065c-.306-.077-.642.156-.667.518-.075 1.082-.239 2.15-.482 2.85-.174.502-.603 1.268-1.238 1.977-.637.712-1.519 1.41-2.614 1.708-.394.108-.62.396-.62.65v4.002c0 .26.22.515.553.55 1.293.137 1.936.53 2.491.868l.04.025c.27.164.495.296.776.393.277.095.63.163 1.14.163h3.5v1H8c-.605 0-1.07-.081-1.466-.218a4.82 4.82 0 0 1-.97-.484l-.048-.03c-.504-.307-.999-.609-2.068-.722C2.682 14.464 2 13.846 2 13V9c0-.85.685-1.432 1.357-1.615.849-.232 1.574-.787 2.132-1.41.56-.627.914-1.28 1.039-1.639.199-.575.356-1.539.428-2.59z"/>
+                                                          </svg>
+                                                          <span id="likeCounter">0</span> Like
+                                                      </button>
+                                                      <button id="commentButton" name="comments" type="button" class="btn btn-outline-success pull-right">
+                                                          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-chat-right" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                              <path fill-rule="evenodd" d="M2 1h12a1 1 0 0 1 1 1v11.586l-2-2A2 2 0 0 0 11.586 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm12-1a2 2 0 0 1 2 2v12.793a.5.5 0 0 1-.854.353l-2.853-2.853a1 1 0 0 0-.707-.293H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h12z"/>
+                                                          </svg>
+                                                          <span> 0 </span> Comments
+                                                      </button>
+                                              </div>
+                                          </div>
+                                          <div class="card-body border-top mx-3 p-2">
+                                              <input id="newPost" type="text" class="form-control" autocomplete="off" name=${result} placeholder="Write a comment..." postType = "comment" wallId = ${creator} receiver = ${creator} required>
+                                              <button style="padding:0;" id="update" class="btn btn-link pull-right">post</button>
+                                          </div>
+                                          <div class="commentInput" style="display:none">
+                                          <div class="commentStart">
+                                          </div>`;
+
+
+    				var str = "";
+    				str += htmlHeader;
+    				str += htmlContent;
+    				str += htmlComment;
+    				str += "</div></div></div></div><br></div>";
+                    var className = ".post";
+                    console.log('image post is ' + imagePost)
+                    if (!imagePost) {
+                        postIdList.push(result.toString());
+                        $(className).prepend(str);
+                    }
+		        }
+
+
+		        var comment = {
+					'content': content,
+					'creator': creator,
+					'receiver': receiver,
+					'date': date2,
+					'type': type,
+					'post_id': result,
+					'parent' : parent,
+					'wall_id' : wallId,
+					'like' : 0,
+				};
+
+                console.log(imagePost);
+                if (imagePost) {
+                    comment = JSON.stringify(comment);
+                    var files = $('#file')[0].files[0];
+                    console.log(files);
+                    var formData = new FormData();
+                    formData.append('file', files);
+                    console.log(formData);
+                    cameraOff();
+                    $.ajax({
+                        url : `/imagepost?content=${comment}`,
+                        type : 'POST',
+                        data : formData,
+                        contentType : false,
+                        processData : false,
+                        success: function(resp) {
+                            console.log('posted with an image');
+                            imagePost = false;
+                        }
+                     });
+                }
+                else {
+                    $.post("/addpost", comment, function(data) {
+                         if (data.error !== undefined) {
+                              alert(`${data.error}`);
+                          }
+				    });
+                }
+                $(this).parent().parent().find("#makePost").first().html("");
+            });
+        });
+
+
+        function refreshPage() {
+        		// retrieves all the posts to be displayed on the page
+            	$.getJSON("/getPosts", function( items ) {
+	                var allPostId = items[0].slice();
+                    var test = ['123.232', '12312.3423123'];
+                    var difference = postIdList.filter(x => !(allPostId.includes(x)));
+
+                    // checks if there were any posts/comments/subcomments deleted and updates the page dynamically
+                    postIdList.forEach(function(item, index) {
+                        if (difference.includes(item)) {
+                            var className = "." + item;
+                            $(document).find(className).remove();
+                            var index = postIdList.indexOf(item);
+                            postIdList.splice(index, 1);
+                        }
+                    });
+
+                    currUser = items[1];
+
+                    // when loading the page for the first time, displays a textbox for making new posts
+                    if (start) {
+                        var htmlFirst = `<div class="form-group" >
+                                            <div class="row no-gutters">
+                                                <img class = \"icon pic${currUser}\"src=\"\">
+                                                <div id = "postbar" class = "col pad"><div contenteditable oninput="if(this.innerHTML.trim()==='<br>')this.innerHTML=''" id="makePost" class=\"form-control\" rows=\"2\" placeholder=\"What\'s on your mind?\" name= ${currUser}  placeholder=\"post!\" postType = \"post\" wallId = ${currUser}  receiver = ${currUser} ></div></div>
+                                            </div>
+                                        </div>
+                                        <div class = "form-group">
+                                            <button id=\"update\" class=\"btn btn-primary\">Post</button>
+                                            <input class="inputfile" type="file" name="file" onchange = "loadFile(event)" id = "file" accept="image/*"/>
+                                            <label for="file" class="custom-file-upload">
+
+                                                Upload File
+                                            </label>
+                                        </div>`;
+                        $(".newPost").html(htmlFirst);
+                    }
+
+                    var html = '';
+                    // iterate through each post to display 
+                    items.forEach(function(item, index) {
+                        if (index > 2) {
+                           // console.log(item);
+                            var a = new Date(item.post_id * 1000);
+                          var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                          var year = a.getFullYear();
+                          var month = months[a.getMonth()];
+                          var date = a.getDate();
+                          var hour = a.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                          var time = month + ' ' + date + ', ' + year + ' at ' + hour;
+                            var likeColor;
+
+                            if (item.like_list.includes(currUser)) {
+                               likeColor = "btn-primary";
+                            } else {
+                               likeColor = "btn-outline-primary";
+                            }
+                            var htmlHeader = `<div class=${item.post_id}>
+                                                <div class="card p-0">
+                                                    <div class="card-body bg-white border-bottom mx-2 pb-0 pt-4 border-0">
+                                                    <div class="text-right">
+                                                        <button data-toggle="tooltip" title="Delete post" data-placement="top" style="position:absolute; color:#666565" id="delete" postType="post" receiver=${item.receiver} creator=${item.creator} postId=${item.post_id} wallId=${item.creator} type="button" class="btn pull-right btn-xs px-1 py-0 m-0">x</button>
+                                                    </div>`;
+                            if (item.type != "news") {
+                                if (item.creator_name !== item.receiver_name) {
+                                    htmlHeader += `          <h6 id="postName"><span><img class = \"icon pic${item.creator}\"src=\"\"></span>${item.creator_name} ▶ ${item.receiver_name} </h6>
+                                                         <h5 id="date" class="mb-4">${time} </h6>`;
+                                } else {
+                                    if (item.type == 'profile') {
+                                        htmlHeader += `<h6 id="postName"><span><img class = \"icon pic${item.creator}\"src=\"\"></span>${item.creator_name}<span id = "spanProfile"> updated profile picture</span></h6>
+                                                    <h5 id="date" class="mb-4">${time} </h6>
+                                                `;
+                                    }
+                                    else if (item.type == 'status') {
+                                        htmlHeader += `<h6 id="postName"><span><img class = \"icon pic${item.creator}\"src=\"\"></span>${item.creator_name}<span id = "spanProfile"> updated status</span></h6>
+                                                    <h5 id="date" class="mb-4">${time} </h6>
+                                                `;
+                                    }
+                                    else if (item.type == 'friends') {
+                                        htmlHeader += `<h6 id="postName"><span><img class = \"icon pic${item.creator}\"src=\"\"></span>${item.creator_name}<span id = "spanProfile"> added a new friend!</span></h6>
+                                                    <h5 id="date" class="mb-4">${time} </h6>
+                                                `;
+                                    }
+                                    else {
+                                        htmlHeader += `     <h6 id="postName"><span><img class = \"icon pic${item.creator}\"src=\"\"></span>${item.creator_name}</h6>
+                                                    <h5 id="date" class="mb-4">${time} </h6>
+                                                `;
+                                    }
+
+                                }
+                            }
+
+                            if (item.type == 'news') {
+                                var info = JSON.parse(item.content);
+                                htmlContent =
+                                    `
+                                        <h2 class = "headline">
+                                        <img src = ${info.image}>
+                                         <a href=${info.link} class = "head" style="text-decoration: none" > ${info.headline} </a>
+                                        </h2>
+                                        <p class = "details"> ${info.authors} | ${info.date}</p>
+                                        <p class = "short_description">${info.description} </p>` // add <div>?
+                            }
+                            else if (item.type == 'status') {
+                                var content = JSON.parse(item.content)
+                                htmlContent = `
+                                    <div id = "token">
+                                        ${content.icon}
+                                    </div>
+                                    <div id = "info_details">
+                                        <p class = "info_details"> ${content.text} </p>
+                                    </div>`
+                            }
+                            else if (item.type == 'friends') {
+                                var content = JSON.parse(item.content)
+                                htmlContent = `
+                                    <div id = "token">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" class="bi bi-person-check-fill" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm9.854-2.854a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L12.5 7.793l2.646-2.647a.5.5 0 0 1 .708 0z"/>
+                  </svg>
+                                    </div>
+                                    <div id = "info_details">
+                                        <p class = "info_details"> ${content.receiver} became friends with ${content.sender} </p>
+                                    </div>`
+                            }
+                            else if (item.type == 'profile') {
+                                htmlContent = `<img src = "${item.content}"}>`
+                            }
+                            else if (item.type == 'image') {
+                                var content = JSON.parse(item.content);
+                                htmlContent = `<div> ${content.text} </div>
+                                               <div id = "fill"> <img id = "pi" src = "${content.url}""> </div>`
+                            }
+                            else {
+                                htmlContent = '<div>' + item.content + '</div></div>';
+                            }
+
+                            //var htmlContent = `<h6>${item.content}</h6>`;
+
+
+                            var htmlCommentCtr = '';
+                            var likeList;
+                            if (item.like_list.size === 0) {
+                                likeList = "";
+                            } else {
+                                likeList = item.like_list.toString();
+                            }
+                            var commentCtr = item.children.length;
+                            item.children.forEach(function (item2, index) {
+                                commentCtr += item2.children.length;
+                            });
+                            if (item.type == "news") {
+                                var htmlComment = `<div class="wrapper">
+                                                <div>
+                                                    <div class="card-body text-center">
+                                                            <button news=${JSON.parse(item.content).id} postId=${item.post_id} wallId= ${item.wall_id} creator = ${item.creator} receiver = ${item.receiver} likeList=${likeList} name="like" type="button" class="btn ${likeColor} pull-left" id="likebutton">
+                                                                <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-hand-thumbs-up" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                                    <path fill-rule="evenodd" d="M6.956 1.745C7.021.81 7.908.087 8.864.325l.261.066c.463.116.874.456 1.012.965.22.816.533 2.511.062 4.51a9.84 9.84 0 0 1 .443-.051c.713-.065 1.669-.072 2.516.21.518.173.994.681 1.2 1.273.184.532.16 1.162-.234 1.733.058.119.103.242.138.363.077.27.113.567.113.856 0 .289-.036.586-.113.856-.039.135-.09.273-.16.404.169.387.107.819-.003 1.148a3.163 3.163 0 0 1-.488.901c.054.152.076.312.076.465 0 .305-.089.625-.253.912C13.1 15.522 12.437 16 11.5 16v-1c.563 0 .901-.272 1.066-.56a.865.865 0 0 0 .121-.416c0-.12-.035-.165-.04-.17l-.354-.354.353-.354c.202-.201.407-.511.505-.804.104-.312.043-.441-.005-.488l-.353-.354.353-.354c.043-.042.105-.14.154-.315.048-.167.075-.37.075-.581 0-.211-.027-.414-.075-.581-.05-.174-.111-.273-.154-.315L12.793 9l.353-.354c.353-.352.373-.713.267-1.02-.122-.35-.396-.593-.571-.652-.653-.217-1.447-.224-2.11-.164a8.907 8.907 0 0 0-1.094.171l-.014.003-.003.001a.5.5 0 0 1-.595-.643 8.34 8.34 0 0 0 .145-4.726c-.03-.111-.128-.215-.288-.255l-.262-.065c-.306-.077-.642.156-.667.518-.075 1.082-.239 2.15-.482 2.85-.174.502-.603 1.268-1.238 1.977-.637.712-1.519 1.41-2.614 1.708-.394.108-.62.396-.62.65v4.002c0 .26.22.515.553.55 1.293.137 1.936.53 2.491.868l.04.025c.27.164.495.296.776.393.277.095.63.163 1.14.163h3.5v1H8c-.605 0-1.07-.081-1.466-.218a4.82 4.82 0 0 1-.97-.484l-.048-.03c-.504-.307-.999-.609-2.068-.722C2.682 14.464 2 13.846 2 13V9c0-.85.685-1.432 1.357-1.615.849-.232 1.574-.787 2.132-1.41.56-.627.914-1.28 1.039-1.639.199-.575.356-1.539.428-2.59z"/>
+                                                                </svg>
+                                                                <span id="likeCounter">${item.like}</span> Like
+                                                            </button>
+                                                            <button id="commentButton" name="comments" type="button" class="btn btn-outline-success pull-right">
+                                                                <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-chat-right" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                                    <path fill-rule="evenodd" d="M2 1h12a1 1 0 0 1 1 1v11.586l-2-2A2 2 0 0 0 11.586 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm12-1a2 2 0 0 1 2 2v12.793a.5.5 0 0 1-.854.353l-2.853-2.853a1 1 0 0 0-.707-.293H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h12z"/>
+                                                                </svg>
+                                                                <span id="commentCounter"> ${commentCtr} </span> Comments
+                                                            </button>
+                                                    </div>
+                                                </div>
+
+                                                    <div class="card-body border-top mx-3 p-2">
+                                                        <input id="newPost" type="text" class="form-control" autocomplete="off" name=${item.post_id} placeholder="Write a comment..." postType = "comment" wallId = ${item.creator} receiver = ${item.creator} required>
+                                                        <button style="padding:0;" id="update" class="btn btn-link pull-right">post</button>
+                                                    </div>
+                                                    <div class="commentInput" style="display:none">
+                                                    <div class="commentStart">
+                                                    </div>`;
+                            }
+                            else {
+                                var htmlComment = `<div class="wrapper">
+                                                <div>
+                                                    <div class="card-body text-center">
+                                                            <button postId=${item.post_id} wallId= ${item.wall_id} creator = ${item.creator} receiver = ${item.receiver} likeList=${likeList} name="like" type="button" class="btn ${likeColor} pull-left" id="likebutton">
+                                                                <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-hand-thumbs-up" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                                    <path fill-rule="evenodd" d="M6.956 1.745C7.021.81 7.908.087 8.864.325l.261.066c.463.116.874.456 1.012.965.22.816.533 2.511.062 4.51a9.84 9.84 0 0 1 .443-.051c.713-.065 1.669-.072 2.516.21.518.173.994.681 1.2 1.273.184.532.16 1.162-.234 1.733.058.119.103.242.138.363.077.27.113.567.113.856 0 .289-.036.586-.113.856-.039.135-.09.273-.16.404.169.387.107.819-.003 1.148a3.163 3.163 0 0 1-.488.901c.054.152.076.312.076.465 0 .305-.089.625-.253.912C13.1 15.522 12.437 16 11.5 16v-1c.563 0 .901-.272 1.066-.56a.865.865 0 0 0 .121-.416c0-.12-.035-.165-.04-.17l-.354-.354.353-.354c.202-.201.407-.511.505-.804.104-.312.043-.441-.005-.488l-.353-.354.353-.354c.043-.042.105-.14.154-.315.048-.167.075-.37.075-.581 0-.211-.027-.414-.075-.581-.05-.174-.111-.273-.154-.315L12.793 9l.353-.354c.353-.352.373-.713.267-1.02-.122-.35-.396-.593-.571-.652-.653-.217-1.447-.224-2.11-.164a8.907 8.907 0 0 0-1.094.171l-.014.003-.003.001a.5.5 0 0 1-.595-.643 8.34 8.34 0 0 0 .145-4.726c-.03-.111-.128-.215-.288-.255l-.262-.065c-.306-.077-.642.156-.667.518-.075 1.082-.239 2.15-.482 2.85-.174.502-.603 1.268-1.238 1.977-.637.712-1.519 1.41-2.614 1.708-.394.108-.62.396-.62.65v4.002c0 .26.22.515.553.55 1.293.137 1.936.53 2.491.868l.04.025c.27.164.495.296.776.393.277.095.63.163 1.14.163h3.5v1H8c-.605 0-1.07-.081-1.466-.218a4.82 4.82 0 0 1-.97-.484l-.048-.03c-.504-.307-.999-.609-2.068-.722C2.682 14.464 2 13.846 2 13V9c0-.85.685-1.432 1.357-1.615.849-.232 1.574-.787 2.132-1.41.56-.627.914-1.28 1.039-1.639.199-.575.356-1.539.428-2.59z"/>
+                                                                </svg>
+                                                                <span id="likeCounter">${item.like}</span> Like
+                                                            </button>
+                                                            <button id="commentButton" name="comments" type="button" class="btn btn-outline-success pull-right">
+                                                                <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-chat-right" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                                    <path fill-rule="evenodd" d="M2 1h12a1 1 0 0 1 1 1v11.586l-2-2A2 2 0 0 0 11.586 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm12-1a2 2 0 0 1 2 2v12.793a.5.5 0 0 1-.854.353l-2.853-2.853a1 1 0 0 0-.707-.293H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h12z"/>
+                                                                </svg>
+                                                                <span id="commentCounter"> ${commentCtr} </span> Comments
+                                                            </button>
+                                                    </div>
+                                                </div>
+
+                                                    <div class="card-body border-top mx-3 p-2">
+                                                        <input id="newPost" type="text" class="form-control" autocomplete="off" name=${item.post_id} placeholder="Write a comment..." postType = "comment" wallId = ${item.creator} receiver = ${item.creator} required>
+                                                        <button style="padding:0;" id="update" class="btn btn-link pull-right">post</button>
+                                                    </div>
+                                                    <div class="commentInput" style="display:none">
+                                                    <div class="commentStart">
+                                                    </div>`;
+                            }
+
+                            // dynamically adds a new post if there were any to the top of the page
+                            if (!(postIdList.includes(item.post_id))) {
+                                postIdList.push(item.post_id);
+                                var str = "";
+                                str += htmlHeader;
+                                str += htmlContent;
+                                str += htmlCommentCtr;
+                                str += htmlComment;
+                                str += "</div></div></div></div><br></div>";
+                                var className = "." + item.post_id;
+                                if (!(start)) {
+                                    $(".post").prepend(str);
+                                    // PROBLEM: whenever another userr makes a post, how to order them in chronological order? Insert in between?
+                                    // keep track of the post in the front?
+                                    //$(".post").append(str);
+                                    var className = ".post";
+                                   // $(className).prepend(str);
+                                }
+                            }
+
+                            // checks any updates on likes and updates dynamically
+                            if (!(start)) {
+                                var likeClass = "." + item.post_id;
+                                var newList = $(document).find(likeClass).find("#likebutton").attr("likeList");
+                                var likeList = newList.split(",");
+                                var difference = likeList.filter(x => !(item.like_list.includes(x)));
+                                // var count = parseInt($(document).find(likeClass).find("#likebutton").find("span").first().text());
+                                likeList.forEach(function(item, index) {
+                                    if (difference.includes(item)) {
+                                        var className = "." + item;
+                                        var index = likeList.indexOf(item);
+                                        likeList.splice(index, 1);
+                                    }
+                                });
+
+                                var difference2 = item.like_list.filter(x => !(likeList.includes(x)));
+                                difference2.forEach(function(item, index) {
+                                    likeList.push(item);
+                                });
+
+                                $(document).find(likeClass).find("#likebutton").attr("likeList", likeList);
+                                var count = item.like_list.length;
+                                $(document).find(likeClass).find("#likebutton").find("span").text(count);
+
+                                $(document).find(likeClass).find("#commentButton").find("span").text(commentCtr);
+                            }
+
+                            // go through each comment under this post and renders them
+                            item.children.forEach(function(comment, index) {
+                                var a = new Date(comment.post_id * 1000);
+                                var months = a.getMonth() + 1;
+                                var year = a.getFullYear();
+                                var date = a.getDate();
+                                var time = months + '/' + date + '/' + year;
+                                htmlComment += `<div class=${comment.post_id}>
+                                                    <div style="border-radius: 15px" class="card-body bg-light my-2 mx-4 p-3">
+                                                        <h6 id="commentName"><span><img class = \"icon pic${comment.creator}\"src=\"\"></span>${comment.creator_name} <span id="date">${time} </span></h6>
+
+                                                        <p class="m-0">
+                                                            ${comment.content}
+                                                        </p>
+                                                        <br>
+                                                        <input style="padding:4px 10px; line-height:80%;" id=newPost type="text" class="form-control" autocomplete="off" name=${comment.post_id} placeholder="Write a reply..." postType ="subcomment" wallId =${item.creator} receiver=${comment.creator} required>
+                                                        <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                                            post
+                                                        </button>
+                                                        <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="comment" creator=${comment.creator} postId=${comment.post_id} wallId=${item.creator} parent=${item.post_id} type="button" class="btn btn-light my-1">
+                                                            delete
+                                                        </button>
+                                                    </div>
+                                                    <div class="subcommentStart">
+                                                    </div>`;
+                                var commentHtml = `<div class=${comment.post_id}>
+                                                      <div style="border-radius: 15px" class="card-body bg-light my-2 mx-4 p-3">
+                                                          <h6 id="commentName"><span><img class = \"icon pic${comment.creator}\"src=\"\"></span>${comment.creator_name} <span id="date">${time} </span></h6>
+
+                                                          <p class="m-0">
+                                                              ${comment.content}
+                                                          </p>
+                                                          <br>
+                                                          <input style="padding:4px 10px; line-height:80%;" id=newPost type="text" class="form-control" autocomplete="off" name=${comment.post_id} placeholder="Write a reply..." postType ="subcomment" wallId =${item.creator} receiver=${comment.creator} required>
+                                                          <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                                              post
+                                                          </button>
+                                                          <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="comment" creator=${comment.creator} postId=${comment.post_id} wallId=${item.creator} parent=${item.post_id} type="button" class="btn btn-light my-1">
+                                                              delete
+                                                          </button>
+                                                      </div>
+                                                      <div class="subcommentStart">
+                                                      </div>`;
+                                // dynamically adds comments
+                                if (!(postIdList.includes(comment.post_id))) {
+                                    postIdList.push(comment.post_id);
+                                    var className = "." + item.post_id;
+                                    if (!(start)) {
+                                       $( commentHtml ).insertAfter( $(document).find(className).find(".commentStart") );
+                                    }
+                                }
+
+                                // go through each subcomment for the current comment and renders them
+                                comment.children.forEach(function(subcomment, index) {
+                                    var a = new Date(subcomment.post_id * 1000);
+                                    var months = a.getMonth() + 1;
+                                    var year = a.getFullYear();
+                                    var date = a.getDate();
+                                    var time = months + '/' + date + '/' + year;
+                                    var commentHtml = `<div class=${subcomment.post_id}>
+                                                            <div style="border-radius: 15px" class="card-body bg-light my-2 ml-5 mr-4 pt-2">
+                                                                <h6 id="commentName">${subcomment.creator_name} <span id="date">${time} </span></h6>
+
+                                                                <div>
+                                                                    ${subcomment.content}
+                                                                </div>
+                                                                <br>
+                                                                <input style="padding:4px 10px; line-height:80%;" id="newPost" type="text" class="form-control input-sm" autocomplete="off" name=${comment.post_id} placeholder="Write a reply..." postType ="subcomment" wallId =${item.creator} receiver =${subcomment.creator} required>
+                                                                <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                                                    post
+                                                                </button>
+                                                                <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="subcomment" creator=${subcomment.creator} postId=${subcomment.post_id} wallId=${item.creator} parent=${comment.post_id} type="button" class="btn btn-light my-1">
+                                                                    delete
+                                                                </button>
+                                                            </div>
+                                                    </div>`;
+                                    htmlComment += `<div class=${subcomment.post_id}>
+                                                           <div style="border-radius: 15px" class="card-body bg-light my-2 ml-5 mr-4 pt-2">
+                                                               <h6 id="commentName"><span><img class = \"icon pic${subcomment.creator}\"src=\"\"></span>${subcomment.creator_name} <span id="date">${time} </span></h6>
+
+                                                               <div>
+                                                                   ${subcomment.content}
+                                                               </div>
+                                                               <br>
+                                                               <input style="padding:4px 10px; line-height:80%;" id="newPost" type="text" class="form-control input-sm" autocomplete="off" name=${comment.post_id} placeholder="Write a reply..." postType ="subcomment" wallId =${item.creator} receiver =${subcomment.creator} required>
+                                                               <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                                                   post
+                                                               </button>
+                                                               <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="subcomment" creator=${subcomment.creator} postId=${subcomment.post_id} wallId=${item.creator} parent=${comment.post_id} type="button" class="btn btn-light my-1">
+                                                                   delete
+                                                               </button>
+                                                           </div>
+                                                   </div>`;
+                                    // dynamically adds subcomments
+                                    if (!(postIdList.includes(subcomment.post_id))) {
+                                        postIdList.push(subcomment.post_id);
+                                        var className = "." + comment.post_id;
+                                        if (!(start)) {
+                                            $( commentHtml ).insertAfter( $(document).find(className).find(".subcommentStart") );
+                                        }
+                                    }
+                                });
+                                htmlComment += "</div>";
+                            });
+
+
+                            html += htmlHeader;
+                            html += htmlContent;
+                            html += htmlCommentCtr;
+                            html += htmlComment;
+                            html += "</div></div></div></div><br></div>";
+                            if (start) {
+                                $(".post").html(html);
+                            }
+                        }
+                    });
+					// when loading for the first time, updates the list of post_ids with all the posts currently displayed
+                    if (start) {
+                        allPostId.forEach(function(item, index) {
+                            postIdList.push(item);
+                        })
+                    }
+                     start = false;
+	    		});
+
+
+	    		setTimeout(function() {
+				  	console.log("refreshing...");
+				  	refreshPage();
+				}, 6000);
+            }
+            
+            // retrieves suggestions based on user's interaction with the search bar
+            function searchAction() {
+              var x = document.getElementById("searchbar2").value;
+              if (x !== "") {
+                $.getJSON("/searchSuggestion/" + x, function( items ) {
+                      searchResults = items;
+
+                      searchResults = searchResults.map((result)=>{
+                           return result = `<li id=${result.username}>${result.fullname}</li>`;
+                       });
+                       wrapper.classList.add("active");
+                       showDropdown(searchResults);
+                       var list = dropBox.querySelectorAll("li");
+                       // adds event handler for each suggestion
+                       for (var i = 0; i < list.length; i++) {
+                           list[i].setAttribute("onclick", "select(this)");
+                       }
+                   });
+                  console.log(x);
+              } else {
+                 wrapper.classList.remove("active");
+              }
+            }
+
+            // when a suggestion is selected and entered, redirects to the corresponding user's wall
+            function select(element){
+                    var userData = element.textContent;
+                    console.log("ID:" + element.id);
+                    inputBox.value = userData;
+                    var urlLink = "/wall/";
+                       if (userData === "") {
+                            alert("Please enter a name!");
+                       } else {
+                            urlLink = urlLink + element.id;
+                            $('#searchUser').attr('action', urlLink);
+                       }
+                    wrapper.classList.remove("active");
+            }
+
+            // shows suggestions and nothing if the search bar is empty
+            function showDropdown(list){
+                var data;
+                if(!list.length){
+                    userValue = inputBox.value;
+                    data = '<li>'+ userValue +'</li>';
+                }else{
+                    data = list.join('');
+                }
+                dropBox.innerHTML = data;
+            }
+    </script>
+    <style>
+    .sidenav-left {
+      position:fixed;
+    }
+    .center {
+      left: 25%;
+    }
+    .sidenav-right {
+      position:fixed;
+      left: 75%;
+    }
+    </style>
+</head>
+<body style="position: relative; z-index: -10000;" class="bg-light">
+  <nav style="z-index: 0;" class="navbar navbar-expand-sm fixed-top navbar-dark bg-primary">
+    <a class="navbar-brand" id="logo" href="/">
+      <img src="https://branding.web-resources.upenn.edu/sites/default/files/UniversityofPennsylvania_Shield_RGB.png" width="30px" class="d-inline-block align-top" alt=""> PennBook
+    </a>
+    <div class="wrapper">
+        <div class="search">
+               <form class="form-inline" id="searchUser" action="">
+                <input id="searchbar2" autocomplete="off" list="user-options" onkeyup="searchAction()" class="form-control" type="text" placeholder="Search users..." aria-label="Search">
+               </form>
+               <div class="dropdown">
+               </div>
+        </div>
+    </div>
+    <ul class="navbar-nav ml-md-auto">
+      <li class="nav-item"><a class="nav-link" href="/chat">Chat</a></li>
+      <li class="nav-item"><a class="nav-link" href="/news">News</a></li>
+      <li class="nav-item"><a class="nav-link" href="/friends">Friends</a></li>
+      <li class="nav-item"><a class="nav-link" href="/wall/<%= curr %>">Profile</a></li>
+      <li class="nav-item">
+        <form action="/logout">
+          <input class="btn btn-outline-light" type="submit" href="/logout" id="logoutButton" value="Logout">
+        </form>
+      </li>
+    </ul>
+  </nav>
+  <div style="position: relative; z-index: -1;" class="container-fluid">
+    <div class="row" id="content">
+    	<div class="col-3 sidenav-left"> <!--left-->
+        <div class="card">
+          <h5 id="friendlogo"> Friend Requests</h5>
+                <div class="list-group" id="requestsList">
+                </div>
+              </div><!--card end-->
+            <div class ="card" style="margin-top: 5%;">
+                <h5 id="chatting"> Chat Requests</h5>
+                <div class="list-group" id="chatrequests">
+                    <!--empty space-->
+                </div>
+            </div>
+        </div>
+        <div class="col-6 bg-light center" style="background-color: bg-light;">
+            <div class="card my-3">
+                <div class="newPost">
+
+
+                </div>
+            </div>
+            <div class="posts">
+                <div class="post">
+                   <div class="make2"></div>
+
+                </div>
+            </div>
+        </div>
+        <div class="col-3 sidenav-right" name="lastcol"> <!--right-->
+          <div class="card">
+              <h5 id="friendlogo"> Friends</h5>
+                <div class="list-group container" id="friendsList">
+
+                </div>
+              </div>
+        </div>
+         </div>
+    </div>
+  </div>
+</html>
