@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css" type="text/css" rel="stylesheet">
+<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css">
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<!--stylesheet-->
+<link type="text/css" href="../css/base.css" rel="stylesheet" />
+<!--font stylesheet-->
+<link rel="preconnect" href="https://fonts.gstatic.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+var socket = io();
+var roomState = false;
+var currentlogin;
+var jsondata;
+var obj;
+var roomname;
+
+
+//console.log("first thing to pop out" + output);
+$.get("/currentlogindata", function(data, status) {
+    jsondata = JSON.stringify(data);
+    obj = JSON.parse(jsondata);
+    console.log(obj);
+    console.log(obj.currentUser);
+    currentlogin = obj.currentUser;
+    console.log('final: ' + currentlogin);
+})
+
+//if denied invite
+socket.on("deny invite", function(invite) {
+  console.log(invite.chatroom);
+  if (invite.chatroom.includes(currentlogin)) {
+    $.post('/removechatlist', {toDelete : String(invite.chatroom)}, function(err, data){});
+    alert(invite.rejector + " denied your chat request.");
+    $(".outgoing_msg").remove();
+    $(".incoming_msg").remove();
+    $(".type_msg").css("visibility", "hidden");
+    $(".chat_head").css("visibility", "hidden");
+    $("#"+String(roomname)).remove();
+  }
+});
+//accept single chat invite
+socket.on("accept invite", function(invite) {
+  if (invite.chatroom.includes(currentlogin)) {
+    alert(invite.acceptor + " accepted your chat request.");
+    var newChat = document.createElement("div");
+  newChat.className = "chat_people";
+  newChat.id = invite.chatroom;
+  var profilepic = document.createElement("div");
+  profilepic.className = "chat_img";
+  var img = document.createElement('img');
+  img.className = `icon pic${document.getElementById("friend-input").value}`;
+  profilepic.appendChild(img);
+  var chatmsg = document.createElement("div");
+  chatmsg.className = "chat_msg";
+  var person = document.createElement("h5");
+  person.innerHTML = invite.acceptor;
+  var time = document.createElement("span");
+  time.className = "chat-date";
+  var msginfo = document.createElement("p");
+  msginfo.innerHTML = "Let's chat!";
+  //appending everything
+  person.appendChild(time);
+  chatmsg.appendChild(person);
+  chatmsg.appendChild(msginfo);
+  newChat.appendChild(profilepic);
+  newChat.appendChild(chatmsg);
+  $("#chatlist").append(newChat);
+  console.log(newChat.id);
+//adds chat room
+    console.log("single invite: " + currentlogin);
+  $.post("/addchatlistsingle", {chattingroomID: newChat.id, user: currentlogin}, function(data){});
+  }
+});
+//somebody left chat
+socket.on("leave chat", function(notif) {
+  console.log("leave chat...." + notif);
+  if (notif.chatroom.includes(currentlogin)) {
+    alert(notif.lefter + " left chat");
+  }
+});
+//refresh 
+socket.on('refresh chat list', function(data) {
+  setTimeout(function() {
+    $(".chat_people").remove();
+    getcurrentchats();
+    }, 1000);
+  
+});
+//accept group invite occurs
+socket.on("accept group invite", function(invite){
+  if (invite.chatroom.includes(currentlogin)) {
+    var chatroomstring = String(invite.chatroom);
+    var chatroomarray = chatroomstring.split("-");
+    console.log(chatroomarray);
+    for (var i = 0; i < chatroomarray.length; i++) {
+      var curruser = chatroomarray[i];
+      console.log("this is what current user should be" + curruser);
+      $.post('/addchatlist', {chattingroomID: invite.chatroom, user: curruser}, function(data){
+
+      });
+    }
+    setTimeout(function() {
+    $(".chat_people").remove();
+    getcurrentchats();
+    }, 1000);
+  }
+});
+//send chat message
+function sendChat(data) {
+    console.log(roomname);
+    console.log("chatting...");
+    console.log(Date.now().toString());
+    console.log(JSON.stringify(currentlogin));
+        console.log("JOINED!!!");
+    if ($('#chat-input').val().trim() !== ' ') {
+        socket.emit('join room', {
+            msgtext: $('#chat-input').val(),
+            sender: currentlogin,
+            chatroom: roomname,
+            time: Date.now()
+        });
+        socket.emit('chat message', {
+            msgtext: $('#chat-input').val(),
+            sender: currentlogin,
+            chatroom: roomname,
+            time: Date.now()
+        });
+        console.log("MESSAGE SENT!");
+        $('#chat-input').val(' ');
+        $('#chat-input').focus();
+    }
+}
+//invite button
+function inviteChat(data) {
+  $("#addmembersearch").css("visibility", "visible");
+}
+
+//create a completely new group chat
+var output;
+function createGroupChat(data) {
+  $("#addmembersearch").css("visibility", "hidden");
+  var people = roomname.split("-");
+  console.log("array check");
+  console.log(people);
+  var added = document.getElementById("newfriend-input").value;
+  people.push(added);
+  console.log(people);
+  people.sort();
+  console.log(people);
+  var newchatname="";
+  for (var i = 0; i < people.length; i++) {
+    newchatname += people[i] + "-";
+  }
+  newchatname.replace("undefined", "");
+  console.log(newchatname);
+  var groupchatID = newchatname;
+  var invitee = document.getElementById("newfriend-input").value;
+  //socket
+  socket.emit('group chat invite', {
+       chatroom: groupchatID,
+       invited: invitee
+  });
+  socket.emit('join room', {
+       chatroom: groupchatID
+  });
+}
+//from search bar at the left
+function createChat(data) {
+  var people = [];
+  var addedperson = document.getElementById("friend-input").value;
+  people.push(currentlogin);
+  people.push(addedperson);
+  people.sort();
+  var chatroomID = people[0] + "-" + people[1];
+    var chatArr = chatroomID.split("-");
+    var string1 = chatArr[0] + "-" + chatArr[1];
+    var string2 = chatArr[1] + "-" + chatArr[0];
+    console.log("CHATROOMSTRING: " + chatroomID);
+    console.log(string1);
+    console.log(string2);
+    var duplicate = "false";
+    $.post('/currentchats', {user: String(currentlogin)}, function(data) {
+        //console.log(data);
+        console.log(data);
+        var jsondata = JSON.stringify(data);
+        var obj = JSON.parse(jsondata);
+        console.log(obj);
+        console.log(obj.data.Item.chatlist);
+        var output = obj.data.Item.chatlist;
+        for (var i = 0; i < output.length; i++) {
+          if (string1 == output[i] || string2 == output[i]) {
+            duplicate = "true";
+            alert("chat already exists");
+          }
+        }
+    });
+    if (duplicate == "false") {
+      socket.emit('chat invite', {
+      chatroom: chatroomID
+      });
+      socket.emit('join room', {
+       chatroom: chatroomID
+      });
+    }
+//socket
+
+
+
+}
+//leave chat
+function leaveChat(data) {
+    socket.emit('leave room', {
+        chatroom: roomname,
+        lefter: currentlogin
+    });
+    $(".outgoing_msg").remove();
+    $(".incoming_msg").remove();
+    $(".type_msg").css("visibility", "hidden");
+    $(".chat_head").css("visibility", "hidden");
+    $("#"+String(roomname)).remove();
+    var count = 0;
+    $.post('/removechatlist', {lefter: currentlogin, toDelete : String(roomname)}, function(err, data){}); 
+}
+</script>
+<script>
+  var chatlist;
+  var profilePics = function() {
+    $.get("/allusers", function(data) {
+            data = JSON.parse(data).data;
+            data.forEach(item => {
+                profileURL = item.profileURL;
+                var elements = document.getElementsByClassName(`pic${item.username}`);
+                for (var i = 0; i < elements.length; i++) {
+                    elements.item(i).src = profileURL;
+                }
+
+            })
+    });
+    setTimeout(profilePics, 4000);
+  }
+  var getcurrentchats = function() {
+    $.post('/currentchats', {user: String(currentlogin)}, function(data) {
+        //console.log(data);
+        //console.log(data);
+  var jsondata = JSON.stringify(data);
+  var obj = JSON.parse(jsondata);
+  console.log(obj);
+  console.log(obj.data.Item.chatlist);
+  var output = obj.data.Item.chatlist;
+  console.log(output);
+  console.log("BEGINNING SNIPPET");
+  console.log(output.length);
+    for (var i = 0; i < output.length; i++) {
+      if (output[i].includes(currentlogin)) {
+        console.log("IF STATEMENT WORKS");
+        console.log("FIRST CODE RUNNING...");
+      var newChat = document.createElement("div");
+    newChat.className = "chat_people";
+    newChat.id = output[i];
+    var profilepic = document.createElement("div");
+    profilepic.className = "chat_img";
+    var img = document.createElement('img');
+    var chatter = newChat.id.split('-').filter(x => x != currentlogin);
+    img.className = `icon pic${chatter[0]}`
+    console.log('the current login is' + currentlogin);
+    profilepic.appendChild(img);
+    var chatmsg = document.createElement("div");
+    chatmsg.className = "chat_msg";
+    var person = document.createElement("h5");
+    person.innerHTML = output[i].replace(currentlogin, "");
+    var time = document.createElement("span");
+    time.className = "chat-date";
+    var msginfo = document.createElement("p");
+    msginfo.innerHTML = "Let's chat!";
+    //appending everything
+    console.log("MIDDLE OF CODE");
+    person.appendChild(time);
+    chatmsg.appendChild(person);
+    chatmsg.appendChild(msginfo);
+    newChat.appendChild(profilepic);
+    newChat.appendChild(chatmsg);
+    $("#chatlist").append(newChat);
+    console.log(newChat.id);
+  }
+  }
+  });
+}
+    getcurrentchats();
+    $(document).ready(function() {
+      //renders current chats
+      profilePics();
+      //online people search
+      var friends;
+        $.post('/getprofile', function(data) {
+          friends = data.data.friends;
+          console.log(data.data.friends);
+          console.log(Object.keys(data.data.friends));
+          friends = Object.keys(data.data.friends);
+        });
+      $.get('/onlineusers', function(data) {
+        console.log(JSON.parse(data).info);
+        var obj1 = JSON.parse(data);
+        var onlineusers = obj1.info;
+
+        for (var i = 0; i < onlineusers.length; i++) {
+          for (var j = 0; j < friends.length; j++) {
+            if (onlineusers[i] == friends[j]) {
+              console.log(onlineusers[i]);
+              var optionElement = document.createElement("option");
+              var onlineperson = onlineusers[i];
+              optionElement.value = onlineperson;
+              console.log(optionElement);
+              document.getElementById("onlineusers").appendChild(optionElement);
+            }
+          } 
+        }
+      });
+      //chat
+        $(document).on("click", ".chat_people", function () {
+            $(".outgoing_msg").remove();
+            $(".incoming_msg").remove();
+            roomname = $(this).attr('id');
+            console.log(roomname);
+            $(roomname).click(function () {
+                console.log("this is inside the id jquery");
+            });
+            var header = document.getElementsByClassName("chat_head");
+            $(".type_msg").css("visibility", "visible");
+            $(".chat_head").css("visibility", "visible");
+            //chat name of other chatters
+            var roomnameString = String(roomname);
+            var chatnameDisplay = roomnameString.replace(currentlogin, "");
+            $("#chatname").text(chatnameDisplay);
+            //iterate previous messages
+            $.post('/output', {room: roomname}, function(data) {
+            console.log("query chat is...");
+            var jsonconversion = JSON.stringify(data);
+            var output = JSON.parse(jsonconversion);
+            //print statement CHECK
+            console.log(output);
+            var output2 = Object.values(output);
+            //console.log(output2);
+            socket.emit('join room', {chatroom: roomname});
+            for (var i = 0; i < output2[0].length; i++) {
+                console.log(output2[0][i].message[2]);
+                if (output2[0][i].message[0] === currentlogin) {
+                    var message_temp = document.createElement("div");
+                    //set text output
+                    message_temp.className = "outgoing_msg";
+                    var innerDiv = document.createElement("div");
+                    innerDiv.className = "sent_msg";
+                    var ptag = document.createElement("p");
+                    ptag.appendChild(document.createTextNode(output2[0][i].message[2]));
+                    innerDiv.appendChild(ptag);
+                    //adds text output
+                    message_temp.appendChild(innerDiv);
+                    //adds time output
+                    var timespan = document.createElement("span");
+                    timespan.className = "time_date";
+                    dateObject = new Date(parseInt(output2[0][i].message[1]));
+                    timespan.appendChild(document.createTextNode(dateObject.toLocaleString('en-US')));
+                    innerDiv.appendChild(timespan);
+                    $(".msg_history").append(message_temp);
+                } else {
+                    var message_temp = document.createElement("div");
+                    message_temp.className = "incoming_msg";
+                    //add profile pic
+                    var pic = document.createElement("img");
+                    var imgdiv = document.createElement("div");
+                    imgdiv.className = "incoming_msg_img";
+                    pic.className = `icon pic${output2[0][i].message[0]}`;
+                    console.log(output2[0][i].message[0]);
+                    imgdiv.appendChild(pic);
+                    //add message text
+                    var messageText = document.createElement("div");
+                    messageText.className = "received_msg";
+                    var innerDiv = document.createElement("div");
+                    innerDiv.className = "received_with_msg";
+                    var ptag = document.createElement("p");
+                    ptag.appendChild(document.createTextNode(output2[0][i].message[2]));
+                    innerDiv.appendChild(ptag);
+                    var timespan = document.createElement("span");
+                    timespan.className = "time_date";
+                    dateObject = new Date(parseInt(output2[0][i].message[1]));
+                    timespan.appendChild(document.createTextNode(dateObject.toLocaleString('en-US')));
+                    innerDiv.appendChild(timespan);
+                    messageText.appendChild(innerDiv);
+                    message_temp.appendChild(imgdiv);
+                    message_temp.appendChild(messageText);
+                    $(".msg_history").append(message_temp);
+
+                }
+            }
+        });
+    });
+
+        //chat socket on
+        socket.on("chat message", function(msg) {
+            $.post("/newmessage", {newMessage : msg}, function(data) {
+                var message_temp = document.createElement("div");
+                if (msg.sender === currentlogin) {
+                    //set text output
+                    message_temp.className = "outgoing_msg";
+                    var innerDiv = document.createElement("div");
+                    innerDiv.className = "sent_msg";
+                    var ptag = document.createElement("p");
+                    ptag.appendChild(document.createTextNode(msg.msgtext));
+                    innerDiv.appendChild(ptag);
+                    //adds text output
+                    message_temp.appendChild(innerDiv);
+                    //adds time output
+                    var timespan = document.createElement("span");
+                    timespan.className = "time_date";
+                    dateObject = new Date(parseInt(msg.time));
+                    timespan.appendChild(document.createTextNode(dateObject.toLocaleString('en-US')));
+                    innerDiv.appendChild(timespan);
+                    $(".msg_history").append(message_temp);
+                } else {
+                    message_temp.className = "incoming_msg";
+                    //add profile pic
+                    var pic = document.createElement("img");
+                    var imgdiv = document.createElement("div");
+                    imgdiv.className = "incoming_msg_img";
+                    pic.className = `icon pic${msg.sender}`;
+                    imgdiv.appendChild(pic);
+                    //add message text
+                    var messageText = document.createElement("div");
+                    messageText.className = "received_msg";
+                    var innerDiv = document.createElement("div");
+                    innerDiv.className = "received_with_msg";
+                    var ptag = document.createElement("p");
+                    ptag.appendChild(document.createTextNode(msg.msgtext));
+                    innerDiv.appendChild(ptag);
+                    var timespan = document.createElement("span");
+                    timespan.className = "time_date";
+                    dateObject = new Date(parseInt(msg.time));
+                    timespan.appendChild(document.createTextNode(dateObject.toLocaleString('en-US')));
+                    innerDiv.appendChild(timespan);
+                    messageText.appendChild(innerDiv);
+                    message_temp.appendChild(imgdiv);
+                    message_temp.appendChild(messageText);
+                    $(".msg_history").append(message_temp);
+
+
+                }
+                });
+            });
+        });
+
+    </script>
+<style>
+/*navbar*/
+#logo {
+  font-size: 150%;
+}
+
+#logoutButton {
+  margin-left: 20px;
+}
+
+#content {
+  width: 100%;
+  margin-top: 80px;
+}
+
+.container{max-width:100%; margin:auto; margin-top: 5%;}
+
+.chathead_search{ padding:10px 29px 10px 20px; overflow:hidden; border-bottom:1px solid #c4c4c4;}
+.chat_head{ padding:10px 29px 10px 20px; overflow:hidden; border-bottom:1px solid #c4c4c4;}
+#leavechat {
+    float:right;
+    margin:auto;
+    height: 90%;
+}
+#addppl {
+    float: right;
+    margin-right: 2%;
+    height: 90%;
+}
+
+.chat_head h4 {
+    color: #007bff;
+    font-size: 21px;
+    margin: auto;
+    float:left;
+    margin-top: 5px;
+}
+
+.recent_heading h4 {
+  color: #007bff;
+  font-size: 21px;
+  margin: auto;
+}
+.search_bar input{ border:1px solid #cdcdcd; border-width:0 0 1px 0; width:80%; padding:2px 0 4px 6px; background:none;}
+.search_bar .input-group-addon button {
+  background: rgba(0, 0, 0, 0) none repeat scroll 0 0;
+  border: medium none;
+  padding: 0;
+  color: #707070;
+  font-size: 18px;
+}
+.search_bar .input-group-addon { margin: 0 0 0 -27px;}
+
+.chat_msg h5{ font-size:15px; color:#464646; margin:0 0 8px 0;}
+.chat_msg h5 span{ font-size:13px; float:right;}
+.chat_msg p{ font-size:14px; color:#989898; margin:auto}
+.chat_img {
+  float: left;
+  width: 11%;
+}
+.chat_msg {
+  float: left;
+  padding: 0 0 0 15px;
+  width: 88%;
+}
+
+.chat_people{ overflow:hidden; clear:both; border-bottom: 1px solid #c4c4c4;}
+.chat_list {
+  border-bottom: 1px solid #c4c4c4;
+  margin: 0;
+  padding: 18px 16px 10px;
+}
+.inbox_chat { height: 550px; overflow-y: scroll;}
+
+.active_chat{ background:#ebebeb;}
+
+.incoming_msg_img {
+  display: inline-block;
+  width: 6%;
+}
+.received_msg {
+  display: inline-block;
+  padding: 0 0 0 10px;
+  vertical-align: top;
+  width: 92%;
+ }
+ .received_with_msg p {
+  background: #ebebeb none repeat scroll 0 0;
+  border-radius: 3px;
+  color: #646464;
+  font-size: 14px;
+  margin: 0;
+  padding: 5px 10px 5px 12px;
+  width: 100%;
+}
+.time_date {
+  color: #747474;
+  display: block;
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+.received_with_msg { width: 57%;}
+.mesgs {
+  float: left;
+  padding: 0px 15px 0 25px;
+  width: 60%;
+}
+
+ .sent_msg p {
+  background: #007bff none repeat scroll 0 0;
+  border-radius: 3px;
+  font-size: 14px;
+  margin: 0; color:#fff;
+  padding: 5px 10px 5px 12px;
+  width:100%;
+}
+.outgoing_msg{ overflow:hidden; margin:26px 0 26px;}
+.sent_msg {
+  float: right;
+  width: 46%;
+}
+.input_msg_write input {
+  background: rgba(0, 0, 0, 0) none repeat scroll 0 0;
+  border: medium none;
+  color: #4c4c4c;
+  font-size: 15px;
+  min-height: 48px;
+  width: 100%;
+}
+
+.icon {
+  border-radius: 50%;
+  width: 45px;
+  height: 45px;
+  margin-top:5px;
+  margin-right:5px;
+  margin-bottom: 5px;
+  object-fit: cover;
+
+}
+
+.type_msg {border-top: 1px solid #c4c4c4;position: relative;}
+.msg_send_btn {
+  background: #007bff none repeat scroll 0 0;
+  border: medium none;
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  font-size: 17px;
+  height: 33px;
+  position: absolute;
+  right: 0;
+  top: 11px;
+  width: 33px;
+}
+.messaging { padding: auto;}
+.msg_history {
+  height: 516px;
+  overflow-y: auto;
+}
+
+img{ max-width:100%;}
+.inbox_people {
+  background: #f8f8f8 none repeat scroll 0 0;
+  float: left;
+  overflow: hidden;
+  width: 40%; border-right:1px solid #c4c4c4;
+}
+.inbox_msg {
+  border: 1px solid #c4c4c4;
+  clear: both;
+  overflow: hidden;
+}
+
+.recent_heading {float: left; width:40%;}
+.search_bar {
+  display: inline-block;
+  text-align: right;
+  width: 60%;
+}
+</style>
+<body>
+  <nav style="z-index: 0;" class="navbar navbar-expand-sm fixed-top navbar-dark bg-primary">
+    <a class="navbar-brand" id="logo" href="/">
+      <img src="https://branding.web-resources.upenn.edu/sites/default/files/UniversityofPennsylvania_Shield_RGB.png" width="30px" class="d-inline-block align-top" alt=""> PennBook
+    </a>
+    <div class="wrapper">
+        <div class="search">
+               <form class="form-inline" id="searchUser" action="">
+                <input id="searchbar2" autocomplete="off" list="user-options" onkeyup="searchAction()" class="form-control" type="text" placeholder="Search users..." aria-label="Search">
+               </form>
+               <div class="dropdown">
+               </div>
+        </div>
+    </div>
+    <ul class="navbar-nav ml-md-auto">
+      <li class="nav-item"><a class="nav-link" href="/chat">Chat</a></li>
+      <li class="nav-item"><a class="nav-link" href="/news">News</a></li>
+      <li class="nav-item"><a class="nav-link" href="/friends">Friends</a></li>
+      <li class="nav-item"><a class="nav-link" href="/wall/<%= user %>">Profile</a></li>
+      <li class="nav-item">
+        <form action="/logout">
+          <input class="btn btn-outline-light" type="submit" href="/logout" id="logoutButton" value="Logout">
+        </form>
+      </li>
+    </ul>
+  </nav>
+<div class="container">
+<h3 class=" text-center">Chat</h3>
+<div class="messaging">
+      <div class="inbox_msg">
+        <div class="inbox_people">
+          <div class="chathead_search">
+            <div class="recent_heading">
+              <h4>Conversations</h4>
+            </div>
+            <div class="search_bar">
+              <div class="stylish-input-group">
+                <input list="onlineusers" type="text" class="search-bar"  id="friend-input" placeholder="Search friends..." >
+                <datalist id="onlineusers">
+                  <!--<option value="TrialRun"></option>-->
+                </datalist>
+                <span class="input-group-addon">
+                <button onclick="return createChat()" type="button"> <i class="fa fa-search" aria-hidden="true"></i> </button>
+                </span>
+               </div>
+            </div>
+          </div>
+          <div class="inbox_chat">
+            <div class="chat_list active_chat" id = "chatlist">
+            </div>
+          </div>
+        </div>
+        <!--message box-->
+        <div class="mesgs">
+            <div class="chat_head" style="visibility: hidden;">
+                <h4 id="chatname">Chat Name</h4>
+                <button onclick="return leaveChat();" id="leavechat" class="leave btn btn-danger">Leave Chat</button>
+                <button onclick="return inviteChat()" id="addppl" class="invite btn btn-info">Invite New Member</button>
+            </div>
+            <div id="addmembersearch" style="visibility: hidden;" class = "selectpicker" multiple>
+            <input list="onlineusers" type="text" class="search-bar"  id="newfriend-input" placeholder="Search friends..." >
+                <datalist id="onlineusers">
+                  <!--<option value="TrialRun"></option>-->
+                </datalist>
+                <span class="input-group-addon">
+                <button onclick="return createGroupChat()" type="button"> <i class="fa fa-search" aria-hidden="true"></i> </button>
+                </span>
+              </div>
+          <div class="msg_history">
+          </div>
+          <div class="type_msg" style="visibility: hidden;">
+            <div class="input_msg_write">
+              <input type="text" class="write_msg" id="chat-input" placeholder="Type a message" />
+              <button onclick="return sendChat();" class="msg_send_btn" type="button"><i class="fa fa-paper-plane-o" aria-hidden="true"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div></div>
+    </body>
+    </html>
