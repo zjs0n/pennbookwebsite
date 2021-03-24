@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+        <script src="https://unpkg.com/react/umd/react.production.min.js" crossorigin></script>
+        <!--stylesheet-->
+        <link type="text/css" href="../css/base.css" rel="stylesheet" />
+        <!--font stylesheet-->
+        <link rel="preconnect" href="https://fonts.gstatic.com">
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap" rel="stylesheet">
+        <!--<script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>-->
+        <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // keeps track of posts currently displayed on teh wall
+        var postIdList = [];
+        var currUser = "<%= user %>";
+        var start = true;
+        var id;
+        var wall = "<%= wall %>";
+        var fullname;
+        var currUsername = "<%= username %>"
+        var oldProfilePic = "";
+        var wrapper;
+        var inputBox;
+        var dropBox;
+
+      function showPassword() {
+        var password = document.getElementById("password");
+        console.log("yay");
+        if (password.type === "text") {
+          password.type = "password";
+        } else {
+          password.type = "text";
+        }
+      }
+      //gets the current information of the user and loads on the edit profile
+      var initialInfo = function() {
+        $.get('/getProfile/<%= info.username %>', function(data) {
+          data = JSON.parse(data);
+          //initially loads the new image
+          document.getElementById("profilePicture").src = data.data.profileURL
+          //gives the old profile picture
+          oldProfilePic = data.data.profileURL;
+          //goes through each interests and pre defines the checks
+          data.data.interests.forEach(i => {
+              document.getElementById(i).checked = true;
+          });
+          document.getElementById(data.data.affiliation).checked = true;
+          document.getElementById("email").value = data.data.email;
+        })
+    }
+
+    $(document).ready(function(){
+       // search bar elements
+       wrapper = document.querySelector(".search");
+       inputBox = wrapper.querySelector("input");
+       dropBox = wrapper.querySelector(".dropdown");
+       // initiates timeout for the page so that the page dynamically updates
+       refreshPage();
+       $("[name='lastcol']").addClass("fullWidth");
+       $("#friendlogo").click(function () {
+           console.log("this stage");
+           if (!room) {
+               $.post('/join', { room: 1 }, function (data) {
+                   if (data.success) {
+                       room=true;
+                       //TODO send socket message
+                       $("[name='chatting']").removeClass("d-none");
+                       console.log("clicks");
+                       $("[name='lastcol']").removeClass("fullWidth");
+                       $(".chatbox").show();
+                       $("#roomOn").html("Chat is ON");
+                   }
+               });
+           } else {
+               $.post('/leave', {room: 1}, function(data) {
+                   if (data.success) {
+                       room = false;
+                       //TODO send socket message
+                       $("[name='chatting']").addClass("d-none");
+                   }
+               });
+           }
+       });
+
+        // displays all of the comments for the post
+        $(".post").on('click', '#commentButton', function() {
+            $(this).closest('.card').find(".commentInput").first().slideToggle("slide");
+        });
+
+        // updates like_list for the posts, as well as the number of likes -also makes ajax calls to update the database
+        $(".post").on('click', '#likebutton', function() {
+            var likeList = $(this).attr("likeList");
+            var postId = $(this).attr("postId");
+            var wallId = $(this).attr("wallId");
+
+            var creator = $(this).attr("creator");
+            var receiver = $(this).attr("receiver");
+
+            var newList = likeList.split(",");
+            var count = parseInt($(this).find("span").first().text());
+            var unlike = "false";
+            if (newList.includes(currUser)) {
+                console.log('inside user already liked');
+                console.log(count);
+                var index = newList.indexOf(currUser);
+                newList.splice(index, 1);
+                $(this).attr("likeList", newList);
+                count --;
+                unlike = "true";
+                $(this).removeClass('btn btn-primary').addClass('btn btn-outline-primary');
+            } else {
+                newList.push(currUser);
+                $(this).attr("likeList", newList);
+                count++;
+                $(this).removeClass('btn btn-outline-primary').addClass('btn btn-primary');
+            }
+
+            $(this).find("span").text(count);
+
+
+            if ($(this).attr("news")) {
+                var post = {
+                    'post_id': postId,
+                    'wall_id': wallId,
+                    'id': $(this).attr("news"),
+                    'count': count,
+                    'unlike': unlike
+                }
+                $.post('/articleLikes', post, function(data) {
+                        if (data.error !== undefined) {
+                            alert(`${data.error}`);
+                        }
+                });
+            }
+            else {
+                var post = {
+                'post_id': postId,
+                'wall_id' : creator,
+                'like' : count,
+                'user': currUser,
+                "unlike": unlike
+                };
+
+                $.post("/addpost?msg=3", post, function(data) {
+                     if (data.error !== undefined) {
+                         alert(`${data.error}`);
+                     }
+                });
+
+                var post2 = {
+                    'post_id': postId,
+                    'wall_id' : receiver,
+                    'like' : count,
+                    'user': currUser,
+                    "unlike": unlike
+                };
+
+                $.post("/addpost?msg=3", post2, function(data) {
+                    if (data.error !== undefined) {
+                        alert(`${data.error}`);
+                    }
+                });
+            }
+
+        });
+
+        // handles addition of comments/subcommetns for each post
+        $(".posts").on('click', '#update', function() {
+            var dateObj = new Date();
+            var result = Math.floor(dateObj.getTime() / 1000.0);
+            var parent = $(this).closest('div').find("#newPost").first().attr("name");
+            var content = $(this).closest('div').find("#newPost").first().val();
+            $(this).parent().parent().find("#makePost").first().empty();
+            $(this).closest('div').find("#newPost").first().val("");
+            var wallId = $(this).closest('div').find("#newPost").first().attr("wallId");
+            var receiver = $(this).closest('div').find("#newPost").first().attr("receiver");
+            var creator = currUser;
+            var date = dateObj.toISOString();
+            var type = $(this).closest('div').find("#newPost").first().attr("postType");
+
+            let day = dateObj.getDate();
+            var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            var year = dateObj.getFullYear();
+            var month = dateObj.getMonth() + 1;
+            var hour = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+            var time = month + '/' + day + '/' + year;
+
+            var comment = {
+                'content': content,
+                'creator': creator,
+                'receiver': receiver,
+                'date': date,
+                'type': type,
+                'post_id': result,
+                'parent' : parent,
+                'wall_id' : wallId
+            };
+
+            var commentHtml;
+            var className = "." + parent;
+            if (type === "subcomment") {
+                commentHtml = `<div class=${result}>
+                                  <div style="border-radius: 15px" class="card-body bg-light my-2 ml-5 mr-4 pt-4">
+                                      <h6 id="commentName">${currUsername} <span id="date">${time} </span></h6>
+
+                                          <div>
+                                              ${content}
+                                          </div>
+                                          <br>
+                                      <input style="padding:4px 10px; line-height:80%;" id="newPost" type="text" class="form-control input-sm" autocomplete="off" name=${parent} placeholder="Write a reply..." postType ="subcomment" wallId =${wallId} receiver =${receiver} required>
+                                      <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                          post
+                                      </button>
+                                      <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="subcomment" creator=${creator} postId=${result} wallId=${wallId} parent=${parent} type="button" class="btn btn-light my-1">
+                                          delete
+                                      </button>
+                                  </div>
+                             </div>`;
+                $( commentHtml ).insertAfter( $(document).find(className).find(".subcommentStart") );
+                if ($(this).closest('.card').find(".commentInput").first().is(":hidden")) {
+                    $(this).closest('.card').find(".commentInput").first().slideToggle("slide");
+                }
+            } else {
+                commentHtml =  `<div class=${result}>
+                                    <div style="border-radius: 15px" class="card-body bg-light my-2 mx-4 p-3">
+                                        <h6 id="commentName"><span><img class = \"icon pic${creator}\"src=\"\"></span>${currUsername} <span id="date">${time} </span></h6>
+
+                                        <p class="m-0">
+                                            ${content}
+                                        </p>
+                                        <br>
+                                        <input style="padding:4px 10px; line-height:80%;" id=newPost type="text" class="form-control" autocomplete="off" name=${result} placeholder="Write a reply..." postType ="subcomment" wallId =${wallId} receiver=${creator} required>
+                                        <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                            post
+                                        </button>
+                                        <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="comment" creator=${creator} postId=${result} wallId=${wallId} parent=${parent} type="button" class="btn btn-light my-1">
+                                            delete
+                                        </button>
+                                    </div>
+                                    <div class="subcommentStart">
+                              </div>`;
+
+                $( commentHtml ).insertAfter( $(document).find(className).find(".commentStart") );
+                if ($(this).closest('.card').find(".commentInput").first().is(":hidden")) {
+                    $(this).closest('.card').find(".commentInput").first().slideToggle("slide");
+                }
+            }
+
+
+            postIdList.push(result.toString());
+
+
+
+            $.post("/addpost", comment, function(data) {
+                if (data.error !== undefined) {
+                    alert(`${data.error}`);
+                }
+            });
+        });
+         
+         // handles deletion of posts/comments/subcomments
+         $(".posts").on('click', '#delete', function() {
+
+            var wallId = $(this).attr("wallId");
+            var postId = $(this).attr("postId");
+            var postType = $(this).attr("postType");
+            var creator = $(this).attr("creator");
+            var parent = $(this).attr("parent");
+            var receiver = $(this).attr("receiver");
+
+            var className = "." + postId;
+            if ((creator !== currUser) && (receiver !== currUser)) {
+                alert("You cannot edit this post.");
+            } else {
+                if (confirm("Please confirm before deleting.") == true) {
+                    if (postType === "post") {
+                       var index = postIdList.indexOf(postId);
+                       postIdList.splice(index, 1);
+                        $(this).closest(className).remove();
+                        var comment1 = {
+                            'post_id': postId,
+                            'wall_id' : receiver,
+                            'parent' : parent,
+                            'type': postType
+                        };
+                        $.post("/addpost?msg=2", comment1, function(data) {
+                            if (data.error !== undefined) {
+                                alert(`${data.error}`);
+                            }
+                        });
+                    } else {
+                        var index = postIdList.indexOf(postId);
+                        postIdList.splice(index, 1);
+                        $(this).closest(className).remove();
+                    }
+                    var comment = {
+                        'post_id': postId,
+                        'wall_id' : wallId,
+                        'parent' : parent,
+                        'type': postType
+                    };
+                    $.post("/addpost?msg=2", comment, function(data) {
+                           if (data.error !== undefined) {
+                                alert(`${data.error}`);
+                           }
+                    });
+                }
+            }
+
+        });
+
+         // handles making new posts
+         $(".newPost").on('click', '#update', function() {
+            let ts = Date.now();
+            let date_ob = new Date(ts);
+            let day = date_ob.getDate();
+            var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            var year = date_ob.getFullYear();
+            var month = months[date_ob.getMonth()];
+            var hour = date_ob.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+            var time = month + ' ' + day + ', ' + year + ' at ' + hour;
+
+            var dateObj = new Date();
+            var result = Math.floor(dateObj.getTime() / 1000.0);
+            postIdList.push(result.toString());
+            id = result;
+            var parent = $(this).parent().parent().find("#makePost").first().attr("name");
+            var content = $(this).parent().parent().find("#makePost").first().html();
+            $(this).parent().parent().find("#makePost").first().val("");
+            var wallId = $(this).parent().parent().find("#makePost").first().attr("wallId");
+            var receiver = $(this).parent().parent().find("#makePost").first().attr("receiver");
+            var creator = currUser;
+            //var date1 =  new Date;
+            var date = dateObj.toISOString();
+            var type = $(this).parent().parent().find("#makePost").first().attr("postType")
+
+            if (type === "post") {
+                var htmlHeader = `<div class=${result}>
+                                    <div class="card p-0">
+                                        <div class="card-body bg-white border-bottom mx-2 pb-0 pt-4 border-0">
+                                        <div class="text-right">
+                                            <button data-toggle="tooltip" title="Delete post" data-placement="top" style="position:absolute; color:#666565" id="delete" postType="post" receiver=${wall} creator=${currUser} postId=${result} wallId=${creator} type="button" class="btn pull-right btn-xs px-1 py-0 m-0">x</button>
+                                        </div>`;
+                if (wall === currUser) {
+                    htmlHeader += `<h6 id="postName"><span><img class = \"icon pic${creator}\"src=\"\"></span>${fullname}</h6>
+                                                                    <h5 id="date" class="mb-4">${time} </h6>
+                                                                `;
+                } else {
+                     htmlHeader += ` <h6 id="postName"><span><img class = \"icon pic${creator}\"src=\"\"></span>${currUsername} ▶ ${fullname} </h6>
+                                                                       <h5 id="date">${time} </h6>`;
+                }
+
+
+                var htmlContent = '<div>' + content + '</div></div>';
+
+
+                var htmlComment =  `<div class="wrapper">
+                                        <div>
+                                            <div class="card-body text-center">
+                                                    <button postId=${result} wallId= ${creator} creator=${creator} receiver = ${receiver}  likeList="" name="like" type="button" class="btn btn-outline-primary" id="likebutton">
+                                                        <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-hand-thumbs-up" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                            <path fill-rule="evenodd" d="M6.956 1.745C7.021.81 7.908.087 8.864.325l.261.066c.463.116.874.456 1.012.965.22.816.533 2.511.062 4.51a9.84 9.84 0 0 1 .443-.051c.713-.065 1.669-.072 2.516.21.518.173.994.681 1.2 1.273.184.532.16 1.162-.234 1.733.058.119.103.242.138.363.077.27.113.567.113.856 0 .289-.036.586-.113.856-.039.135-.09.273-.16.404.169.387.107.819-.003 1.148a3.163 3.163 0 0 1-.488.901c.054.152.076.312.076.465 0 .305-.089.625-.253.912C13.1 15.522 12.437 16 11.5 16v-1c.563 0 .901-.272 1.066-.56a.865.865 0 0 0 .121-.416c0-.12-.035-.165-.04-.17l-.354-.354.353-.354c.202-.201.407-.511.505-.804.104-.312.043-.441-.005-.488l-.353-.354.353-.354c.043-.042.105-.14.154-.315.048-.167.075-.37.075-.581 0-.211-.027-.414-.075-.581-.05-.174-.111-.273-.154-.315L12.793 9l.353-.354c.353-.352.373-.713.267-1.02-.122-.35-.396-.593-.571-.652-.653-.217-1.447-.224-2.11-.164a8.907 8.907 0 0 0-1.094.171l-.014.003-.003.001a.5.5 0 0 1-.595-.643 8.34 8.34 0 0 0 .145-4.726c-.03-.111-.128-.215-.288-.255l-.262-.065c-.306-.077-.642.156-.667.518-.075 1.082-.239 2.15-.482 2.85-.174.502-.603 1.268-1.238 1.977-.637.712-1.519 1.41-2.614 1.708-.394.108-.62.396-.62.65v4.002c0 .26.22.515.553.55 1.293.137 1.936.53 2.491.868l.04.025c.27.164.495.296.776.393.277.095.63.163 1.14.163h3.5v1H8c-.605 0-1.07-.081-1.466-.218a4.82 4.82 0 0 1-.97-.484l-.048-.03c-.504-.307-.999-.609-2.068-.722C2.682 14.464 2 13.846 2 13V9c0-.85.685-1.432 1.357-1.615.849-.232 1.574-.787 2.132-1.41.56-.627.914-1.28 1.039-1.639.199-.575.356-1.539.428-2.59z"/>
+                                                        </svg>
+                                                        <span id="likeCounter">0</span> Like
+                                                    </button>
+                                                    <button id="commentButton" name="comments" type="button" class="btn btn-outline-success pull-right">
+                                                        <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-chat-right" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                            <path fill-rule="evenodd" d="M2 1h12a1 1 0 0 1 1 1v11.586l-2-2A2 2 0 0 0 11.586 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm12-1a2 2 0 0 1 2 2v12.793a.5.5 0 0 1-.854.353l-2.853-2.853a1 1 0 0 0-.707-.293H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h12z"/>
+                                                        </svg>
+                                                        <span> 0 </span> Comments
+                                                    </button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body border-top mx-3 p-2">
+                                            <input id="newPost" type="text" class="form-control" autocomplete="off" name=${result} placeholder="Write a comment..." postType = "comment" wallId = ${creator} receiver = ${creator} required>
+                                            <button style="padding:0;" id="update" class="btn btn-link pull-right">post</button>
+                                        </div>
+                                        <div class="commentInput" style="display:none">
+                                        <div class="commentStart">
+                                        </div>`;
+                var str = "";
+                str += htmlHeader;
+                str += htmlContent;
+                str += htmlComment;
+                str += "</div></div></div><br></div></div>";
+                var className = ".post";
+
+                $(className).prepend(str);
+            }
+
+            var comment = {
+                'content': content,
+                'creator': creator,
+                'receiver': wall,
+                'date': date,
+                'type': type,
+                'post_id': result,
+                'parent' : parent,
+                'wall_id' : wallId,
+                'like' : 0,
+            };
+
+            // Two ajax calls to post on both the current wall and the creator's wall if different user
+            $.post("/addpost", comment, function(data) {
+            });
+            var comment2 = {
+                'content': content,
+                'creator': creator,
+                'receiver': wall,
+                'date': date,
+                'type': type,
+                'post_id': result,
+                'parent' : parent,
+                'wall_id' : wall,
+                'like' : 0,
+            };
+            $.post("/addpost", comment2, function(data) {
+            });
+
+            $(this).parent().parent().find("#makePost").first().html("");
+
+        });
+      //send friend request
+      $(".friendReq").click(function(e) {
+        e.preventDefault();
+        $.ajax({
+          type: "POST",
+          url: "/sendrequest",
+          data: {receiver: "<%= user %>"},
+          success: function(result) {
+              document.getElementById("friendReq").innerHTML = "Pending Request";
+              document.getElementById("friendReq").disabled = true;
+          },
+          error: function(result) {
+              alert('Error adding friend');
+          }
+        });
+      });
+
+      //unfriend user
+      $(".unfriend").click(function(e) {
+        e.preventDefault();
+        $.ajax({
+          type: "POST",
+          url: "/unfriend",
+          data: {receiver: "<%= user %>"},
+          success: function(result) {
+              document.getElementById("unfriend").innerHTML = "+ Add Friend";
+              document.getElementById("unfriend").id = "friendReq";
+          },
+          error: function(result) {
+              alert('Error adding friend');
+          }
+        });
+      });
+    });
+
+      var updateProfile = function() {
+        var loadWallID = "<%= wall %>";
+        var loadUserID = "<%= user %>";
+        console.log(loadWallID + ", " + loadUserID);
+        $.get('/getProfile/' + loadWallID, function(data) {
+            console.log('Changing profile picture');
+            data = JSON.parse(data);
+            console.log(data);
+            //initialize the information
+            document.getElementById("infoname").innerHTML = data.data.name;
+            fullname = data.data.name;
+            if (data.data.affiliation === "School of Engineering and Applied Sciences") {
+              document.getElementById("affiliation").innerHTML = "School of Engineering and A.S.";
+            } else {
+              document.getElementById("affiliation").innerHTML = data.data.affiliation;
+            }
+            var buttonDiv = document.getElementById("buttonsGroup");
+            //edit button
+            var editButton = document.getElementById("editButton");
+            if (loadWallID === loadUserID) {
+              console.log("something happened");
+              editButton.innerHTML = "Edit Profile";
+              editButton.onclick = on;
+            } else if (data.data.friends !== undefined && data.data.friends[loadUserID] !== undefined) {
+              editButton.innerHTML = "Unfriend";
+              editButton.value = loadWallID;
+              editButton.onclick = unfriend;
+              editButton.disabled = false;
+              editButton.classList.add("unfriend");
+            } else if ((data.data.sent_requests !== undefined && data.data.sent_requests[loadUserID] !== undefined) ||
+                  (data.data.received_requests !== undefined && data.data.received_requests[loadUserID] !== undefined)) {
+              editButton.innerHTML = "Pending Request";
+              editButton.disabled = true;
+              editButton.value = loadWallID;
+            } else {
+              editButton.innerHTML = "+ Add Friend";
+              editButton.value = loadWallID;
+              editButton.onclick = friendReq;
+              editButton.disabled = false;
+              editButton.classList.add("friendReq");
+            }
+            //removes all children of div to reset it
+            while (buttonDiv.firstChild) {
+              buttonDiv.removeChild(buttonDiv.firstChild);
+            }
+            data.data.interests.forEach(i => {
+              var button = document.createElement("button");
+              button.innerHTML = i;
+              button.className = "btn btn-outline-info btn-sm interest";
+              buttonDiv.appendChild(button);
+            });
+
+
+
+        });
+        setTimeout(updateProfile, 4000);
+      }
+
+      // turns on the overlay to edit user profile
+      function on() {
+        document.getElementById("edit").style.display = "block";
+        document.getElementById("edit_box").style.display = "block";
+      }
+
+      function profileOff() {
+        document.getElementById("edit").style.display = "none";
+        document.getElementById("edit_box").style.display = "none";
+      }
+
+      function cameraOn() {
+        document.getElementById("edit").style.display = "block";
+        document.getElementById("imageContainer").style.display = "block";
+      }
+
+      function cameraOff() {
+        document.getElementById("edit").style.display = "none";
+        document.getElementById("imageContainer").style.display = "none";
+
+        $("#file").val('');
+      }
+
+      function exitcameraOff() {
+        document.getElementById("edit").style.display = "none";
+        document.getElementById("imageContainer").style.display = "none";
+        var image = document.getElementById('profilePicture');
+        image.src = oldProfilePic;
+        $("#file").val('');
+      }
+
+      function privateOn() {
+        document.getElementById("edit_private").style.display = "block";
+        document.getElementById("edit_box").style.display = "none";
+      }
+
+      function privateOff() {
+        document.getElementById("edit").style.display = "none";
+        document.getElementById("edit_private").style.display = "none";
+      }
+
+      var profileIcon = function() {
+        var profileURL = "";
+        $.get("/allusers", function(data) {
+            data = JSON.parse(data).data;
+            data.forEach(item => {
+                profileURL = item.profileURL;
+                var elements = document.getElementsByClassName(`pic${item.username}`);
+                for (var i = 0; i < elements.length; i++) {
+                    elements.item(i).src = profileURL;
+                }
+
+            })
+
+        });
+        setTimeout(profileIcon, 1500);
+    }
+
+    function friendReq() {
+      $.ajax({
+        type: "POST",
+        url: "/sendrequest",
+        data: {receiver: "<%= wall %>"},
+        success: function(result) {
+            document.getElementById("editButton").innerHTML = "Pending Request";
+            document.getElementById("editButton").disabled = true;
+        },
+        error: function(result) {
+            alert('Error adding friend');
+        }
+      });
+    }
+
+    function unfriend() {
+      $.ajax({
+        type: "POST",
+        url: "/unfriend",
+        data: {receiver: "<%= wall %>"},
+        success: function(result) {
+            document.getElementById("editButton").innerHTML = "+ Add Friend";
+        },
+        error: function(result) {
+            alert('Error adding friend');
+        }
+      });
+    }
+
+      window.onload = function() {
+        initialInfo();
+        updateProfile();
+        profileIcon();
+        $('#but_upload').click(function(){
+          var files = $('#file')[0].files[0];
+          console.log(files);
+          var formData = new FormData();
+          formData.append('file', files)
+          console.log(formData);
+          cameraOff();
+          $.ajax({
+                url : '/profilepic',
+                type : 'POST',
+                data : formData,
+                contentType : false,
+                processData : false,
+                success: function(resp) {
+                  console.log('setting profile picture change');
+                  alert('updated profile picture');
+                  var url = JSON.parse(resp).data;
+                  var postData = {'url': url };
+                  $.post('/addprofilepost', postData, function(data) {
+                    console.log('just posted on main page');
+                  });
+                }
+          });
+        });
+
+        $('#infoSubmit').click(function(e) {
+          incrementCount();
+          if (document.getElementById("business").required) {
+            document.getElementById("newsError").className = "text-danger"
+          } else {
+            document.getElementById("newsError").className = "text-secondary"
+            e.preventDefault();
+            console.log('updating information');
+            var currInfo = $("#editForm").serialize()
+            console.log(currInfo);
+            $.post("/publicupdate", $("#editForm").serialize(), function(data) {
+              console.log("updated user information");
+              //calls indexUser to update user information and then sends a livy process to update
+              $.get("/indexusers", function(data) {
+                $.get('/livy', function(data) {
+                  console.log('done running adsorption');
+                });
+              });
+              document.getElementById("edit").style.display = "none";
+              document.getElementById("edit_box").style.display = "none";
+            });
+          }
+        });
+
+        $('#privateSubmit').click(function(e) {
+          e.preventDefault();
+          console.log('submitting private information');
+           console.log(document.getElementById("password").value);
+        console.log();
+
+        if (document.getElementById("password").value == document.getElementById("passwordConfirm").value) {
+            $.post("/privateupdate", $('#editAccount').serialize(), function(data) {
+             console.log('submitted private data');
+             document.getElementById("edit").style.display = "none";
+              document.getElementById("edit_private").style.display = "none";
+              document.getElementById("password").value = "";
+            });
+          }
+         else {
+            console.log('error');
+            alert('passwords do not match');
+             document.getElementById("passwordConfirm").value = "";
+         }
+        });
+      }
+
+      function refreshPage() {
+        // retrieves all of the psots for this user
+        $.getJSON("/showWall/user/" + wall, function( items ) {
+           if (items.error !== undefined) {
+                alert(`${items.error}`);
+           } else {
+              var allPostId = items[0].slice();
+              var test = ['123.232', '12312.3423123'];
+              var difference = postIdList.filter(x => !(allPostId.includes(x)));
+
+              postIdList.forEach(function(item, index) {
+                  if (difference.includes(item)) {
+                      var className = "." + item;
+                      $(document).find(className).remove();
+                      var index = postIdList.indexOf(item);
+                      postIdList.splice(index, 1);
+                  }
+              });
+
+              if (start) {
+                  var htmlFirst = `<div class="form-group" >
+                                            <div class="row no-gutters">
+                                                <img class = \"icon pic${currUser}\"src=\"\">
+                                                <div id = "postbar" class = "col pad"><div contenteditable oninput="if(this.innerHTML.trim()==='<br>')this.innerHTML=''" id="makePost" class=\"form-control\" rows=\"2\" placeholder=\"What\'s on your mind?\" name= ${currUser}  placeholder=\"post!\" postType = \"post\" wallId = ${currUser}  receiver = ${currUser} ></div></div>
+                                            </div>
+                                        </div>
+                                        <div class = "form-group">
+                                            <button id=\"update\" class=\"btn btn-primary\">Post</button>
+                                        </div>`;
+                  $(".newPost").html(htmlFirst);
+              }
+
+              var html = '';
+              items.forEach(function(item, index) {
+
+
+                  if (index > 1 && item.type != 'news') {
+                       var a = new Date(item.post_id * 1000);
+                        var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                        var year = a.getFullYear();
+                        var month = months[a.getMonth()];
+                        var date = a.getDate();
+                        var hour = a.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                        var time = month + ' ' + date + ', ' + year + ' at ' + hour;
+                          var likeColor;
+
+                      if (item.like_list.includes(currUser)) {
+                         likeColor = "btn-primary";
+                      } else {
+                         likeColor = "btn-outline-primary";
+                      }
+                      var htmlHeader = `<div class=${item.post_id}>
+                                          <div class="card p-0">
+                                              <div class="card-body bg-white border-bottom mx-2 pb-0 pt-4 border-0">
+                                              <div class="text-right">
+                                                  <button data-toggle="tooltip" title="Delete post" data-placement="top" style="position:absolute; color:#666565" id="delete" postType="post" receiver=${item.receiver} creator=${item.creator} postId=${item.post_id} wallId=${item.creator} type="button" class="btn pull-right btn-xs px-1 py-0 m-0">x</button>
+                                              </div>`;
+                      if (item.type != "news") {
+                          if (item.creator_name !== item.receiver_name) {
+                              htmlHeader += `          <h6 id="postName"><span><img class = \"icon pic${item.creator}\"src=\"\"></span>${item.creator_name} ▶ ${item.receiver_name} </h6>
+                                                   <h5 id="date" class="mb-4">${time} </h6>`;
+                          } else {
+                              if (item.type == 'profile') {
+                                  htmlHeader += `<h6 id="postName"><span><img class = \"icon pic${item.creator}\"src=\"\"></span>${item.creator_name}<span id = "spanProfile"> updated profile picture</span></h6>
+                                              <h5 id="date" class="mb-4">${time} </h6>
+                                          `;
+                              }
+                              else if (item.type == 'status') {
+                                  htmlHeader += `<h6 id="postName"><span><img class = \"icon pic${item.creator}\"src=\"\"></span>${item.creator_name}<span id = "spanProfile"> updated status</span></h6>
+                                              <h5 id="date" class="mb-4">${time} </h6>
+                                          `;
+                              }
+                              else if (item.type == 'friends') {
+                                        htmlHeader += `<h6 id="postName"><span><img class = \"icon pic${item.creator}\"src=\"\"></span>${item.creator_name}<span id = "spanProfile"> added a new friend!</span></h6>
+                                                    <h5 id="date" class="mb-4">${time} </h6>
+                                                `;
+                                    }
+                              else {
+                                  htmlHeader += `     <h6 id="postName"><span><img class = \"icon pic${item.creator}\"src=\"\"></span>${item.creator_name}</h6>
+                                              <h5 id="date" class="mb-4">${time} </h6>
+                                          `;
+                              }
+
+                          }
+                      }
+
+                      if (item.type == 'image') {
+                        var content = JSON.parse(item.content);
+                        htmlContent = `<div> ${content.text} </div>
+                                     <div id = "fill"> <img id = "pi" src = "${content.url}""> </div>`
+                      }
+                      else if (item.type == 'status') {
+                          var content = JSON.parse(item.content)
+                          htmlContent = `
+                              <div id = "token">
+                                  ${content.icon}
+                              </div>
+                              <div id = "info_details">
+                                  <p class = "info_details"> ${content.text} </p>
+                              </div>`
+                      }
+                      else if (item.type == 'friends') {
+                                var content = JSON.parse(item.content)
+                                htmlContent = `
+                                    <div id = "token">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" class="bi bi-person-check-fill" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm9.854-2.854a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L12.5 7.793l2.646-2.647a.5.5 0 0 1 .708 0z"/>
+                  </svg>
+                                    </div>
+                                    <div id = "info_details">
+                                        <p class = "info_details"> ${content.receiver} became friends with ${content.sender} </p>
+                                    </div>`
+                      }
+                      else if (item.type == 'profile') {
+                          htmlContent = `<img src = "${item.content}"}>`
+                      }
+                      else {
+                          htmlContent = '<div>' + item.content + '</div></div>';
+                      }
+
+                      //var htmlContent = `<h6>${item.content}</h6>`;
+
+
+                      var htmlCommentCtr = '';
+                      var likeList;
+                      if (item.like_list.size === 0) {
+                          likeList = "";
+                      } else {
+                          likeList = item.like_list.toString();
+                      }
+                      var commentCtr = item.children.length;
+                          item.children.forEach(function (item2, index) {
+                              commentCtr += item2.children.length;
+                      });
+                      if (item.type == "news") {
+                          var htmlComment = `<div class="wrapper">
+                                          <div>
+                                              <div class="card-body text-center">
+                                                      <button news=${JSON.parse(item.content).id} postId=${item.post_id} wallId= ${item.wall_id} creator=${item.creator} receiver=${item.receiver} likeList=${likeList} name="like" type="button" class="btn ${likeColor} pull-left" id="likebutton">
+                                                          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-hand-thumbs-up" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                              <path fill-rule="evenodd" d="M6.956 1.745C7.021.81 7.908.087 8.864.325l.261.066c.463.116.874.456 1.012.965.22.816.533 2.511.062 4.51a9.84 9.84 0 0 1 .443-.051c.713-.065 1.669-.072 2.516.21.518.173.994.681 1.2 1.273.184.532.16 1.162-.234 1.733.058.119.103.242.138.363.077.27.113.567.113.856 0 .289-.036.586-.113.856-.039.135-.09.273-.16.404.169.387.107.819-.003 1.148a3.163 3.163 0 0 1-.488.901c.054.152.076.312.076.465 0 .305-.089.625-.253.912C13.1 15.522 12.437 16 11.5 16v-1c.563 0 .901-.272 1.066-.56a.865.865 0 0 0 .121-.416c0-.12-.035-.165-.04-.17l-.354-.354.353-.354c.202-.201.407-.511.505-.804.104-.312.043-.441-.005-.488l-.353-.354.353-.354c.043-.042.105-.14.154-.315.048-.167.075-.37.075-.581 0-.211-.027-.414-.075-.581-.05-.174-.111-.273-.154-.315L12.793 9l.353-.354c.353-.352.373-.713.267-1.02-.122-.35-.396-.593-.571-.652-.653-.217-1.447-.224-2.11-.164a8.907 8.907 0 0 0-1.094.171l-.014.003-.003.001a.5.5 0 0 1-.595-.643 8.34 8.34 0 0 0 .145-4.726c-.03-.111-.128-.215-.288-.255l-.262-.065c-.306-.077-.642.156-.667.518-.075 1.082-.239 2.15-.482 2.85-.174.502-.603 1.268-1.238 1.977-.637.712-1.519 1.41-2.614 1.708-.394.108-.62.396-.62.65v4.002c0 .26.22.515.553.55 1.293.137 1.936.53 2.491.868l.04.025c.27.164.495.296.776.393.277.095.63.163 1.14.163h3.5v1H8c-.605 0-1.07-.081-1.466-.218a4.82 4.82 0 0 1-.97-.484l-.048-.03c-.504-.307-.999-.609-2.068-.722C2.682 14.464 2 13.846 2 13V9c0-.85.685-1.432 1.357-1.615.849-.232 1.574-.787 2.132-1.41.56-.627.914-1.28 1.039-1.639.199-.575.356-1.539.428-2.59z"/>
+                                                          </svg>
+                                                          <span id="likeCounter">${item.like}</span> Like
+                                                      </button>
+                                                      <button id="commentButton" name="comments" type="button" class="btn btn-outline-success pull-right">
+                                                          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-chat-right" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                              <path fill-rule="evenodd" d="M2 1h12a1 1 0 0 1 1 1v11.586l-2-2A2 2 0 0 0 11.586 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm12-1a2 2 0 0 1 2 2v12.793a.5.5 0 0 1-.854.353l-2.853-2.853a1 1 0 0 0-.707-.293H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h12z"/>
+                                                          </svg>
+                                                          <span> 0 </span> Comments
+                                                      </button>
+                                              </div>
+                                          </div>
+
+                                              <div class="card-body border-top mx-3 p-2">
+                                                  <input id="newPost" type="text" class="form-control" autocomplete="off" name=${item.post_id} placeholder="Write a comment..." postType = "comment" wallId = ${item.creator} receiver = ${item.creator} required>
+                                                  <button style="padding:0;" id="update" class="btn btn-link pull-right">post</button>
+                                              </div>
+                                              <div class="commentInput" style="display:none">
+                                              <div class="commentStart">
+                                              </div>`;
+                      } else {
+                          var htmlComment = `<div class="wrapper">
+                                          <div>
+                                              <div class="card-body text-center">
+                                                      <button postId=${item.post_id} wallId= ${item.wall_id} creator = ${item.creator} receiver = ${item.receiver} name="like" type="button" class="btn ${likeColor} pull-left" id="likebutton" likeList=${likeList}>
+                                                          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-hand-thumbs-up" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                              <path fill-rule="evenodd" d="M6.956 1.745C7.021.81 7.908.087 8.864.325l.261.066c.463.116.874.456 1.012.965.22.816.533 2.511.062 4.51a9.84 9.84 0 0 1 .443-.051c.713-.065 1.669-.072 2.516.21.518.173.994.681 1.2 1.273.184.532.16 1.162-.234 1.733.058.119.103.242.138.363.077.27.113.567.113.856 0 .289-.036.586-.113.856-.039.135-.09.273-.16.404.169.387.107.819-.003 1.148a3.163 3.163 0 0 1-.488.901c.054.152.076.312.076.465 0 .305-.089.625-.253.912C13.1 15.522 12.437 16 11.5 16v-1c.563 0 .901-.272 1.066-.56a.865.865 0 0 0 .121-.416c0-.12-.035-.165-.04-.17l-.354-.354.353-.354c.202-.201.407-.511.505-.804.104-.312.043-.441-.005-.488l-.353-.354.353-.354c.043-.042.105-.14.154-.315.048-.167.075-.37.075-.581 0-.211-.027-.414-.075-.581-.05-.174-.111-.273-.154-.315L12.793 9l.353-.354c.353-.352.373-.713.267-1.02-.122-.35-.396-.593-.571-.652-.653-.217-1.447-.224-2.11-.164a8.907 8.907 0 0 0-1.094.171l-.014.003-.003.001a.5.5 0 0 1-.595-.643 8.34 8.34 0 0 0 .145-4.726c-.03-.111-.128-.215-.288-.255l-.262-.065c-.306-.077-.642.156-.667.518-.075 1.082-.239 2.15-.482 2.85-.174.502-.603 1.268-1.238 1.977-.637.712-1.519 1.41-2.614 1.708-.394.108-.62.396-.62.65v4.002c0 .26.22.515.553.55 1.293.137 1.936.53 2.491.868l.04.025c.27.164.495.296.776.393.277.095.63.163 1.14.163h3.5v1H8c-.605 0-1.07-.081-1.466-.218a4.82 4.82 0 0 1-.97-.484l-.048-.03c-.504-.307-.999-.609-2.068-.722C2.682 14.464 2 13.846 2 13V9c0-.85.685-1.432 1.357-1.615.849-.232 1.574-.787 2.132-1.41.56-.627.914-1.28 1.039-1.639.199-.575.356-1.539.428-2.59z"/>
+                                                          </svg>
+                                                          <span id="likeCounter">${item.like}</span> Like
+                                                      </button>
+                                                      <button id="commentButton" name="comments" type="button" class="btn btn-outline-success pull-right">
+                                                          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-chat-right" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                              <path fill-rule="evenodd" d="M2 1h12a1 1 0 0 1 1 1v11.586l-2-2A2 2 0 0 0 11.586 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm12-1a2 2 0 0 1 2 2v12.793a.5.5 0 0 1-.854.353l-2.853-2.853a1 1 0 0 0-.707-.293H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h12z"/>
+                                                          </svg>
+                                                          <span> 0 </span> Comments
+                                                      </button>
+                                              </div>
+                                          </div>
+
+                                              <div class="card-body border-top mx-3 p-2">
+                                                  <input id="newPost" type="text" class="form-control" autocomplete="off" name=${item.post_id} placeholder="Write a comment..." postType = "comment" wallId = ${item.creator} receiver = ${item.creator} required>
+                                                  <button style="padding:0;" id="update" class="btn btn-link pull-right">post</button>
+                                              </div>
+                                              <div class="commentInput" style="display:none">
+                                              <div class="commentStart">
+                                              </div>`;
+                      }
+
+                      // adds any new posts if there any dynamically
+                      if (!(postIdList.includes(item.post_id))) {
+                          postIdList.push(item.post_id);
+                          var str = "";
+                          str += htmlHeader;
+                          str += htmlContent;
+                          str += htmlCommentCtr;
+                          str += htmlComment;
+                          str += "</div></div></div></div><br></div>";
+                          var className = "." + item.post_id;
+                          if (!(start)) {
+                              // PROBLEM: whenever another userr makes a post, how to order them in chronological order? Insert in between?
+                              // keep track of the post in the front?
+                              //$(".post").append(str);
+                              var className = ".post";
+                              $(className).prepend(str);
+                          }
+                      }
+
+                      // updates likes dynamically if there are any changes 
+                      if (!(start)) {
+                          var likeClass = "." + item.post_id;
+                          var newList = $(document).find(likeClass).find("#likebutton").attr("likeList");
+                            var likeList = newList.split(",");
+                              var difference = likeList.filter(x => !(item.like_list.includes(x)));
+                              // var count = parseInt($(document).find(likeClass).find("#likebutton").find("span").first().text());
+                              likeList.forEach(function(item, index) {
+                                  if (difference.includes(item)) {
+                                      var className = "." + item;
+                                      var index = likeList.indexOf(item);
+                                      likeList.splice(index, 1);
+                                  }
+                              });
+
+                              var difference2 = item.like_list.filter(x => !(likeList.includes(x)));
+                              difference2.forEach(function(item, index) {
+                                  likeList.push(item);
+                              });
+
+                              $(document).find(likeClass).find("#likebutton").attr("likeList", likeList);
+                              var count = item.like_list.length;
+                              $(document).find(likeClass).find("#likebutton").find("span").text(count);
+                              $(document).find(likeClass).find("#commentButton").find("span").text(commentCtr);
+                      }
+                      // getting all comments for the post
+                      item.children.forEach(function(comment, index) {
+                          var a = new Date(comment.post_id * 1000);
+                          var months = a.getMonth() + 1;
+                          var year = a.getFullYear();
+                          var date = a.getDate();
+                          var time = months + '/' + date + '/' + year;
+                          htmlComment += `<div class=${comment.post_id}>
+                                              <div style="border-radius: 15px" class="card-body bg-light my-2 mx-4 p-3">
+                                                  <h6 id="commentName"><span><img class = \"icon pic${comment.creator}\"src=\"\"></span>${comment.creator_name} <span id="date">${time} </span></h6>
+
+                                                  <p class="m-0">
+                                                      ${comment.content}
+                                                  </p>
+                                                  <br>
+                                                  <input style="padding:4px 10px; line-height:80%;" id=newPost type="text" class="form-control" autocomplete="off" name=${comment.post_id} placeholder="Write a reply..." postType ="subcomment" wallId =${item.creator} receiver=${comment.creator} required>
+                                                  <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                                      post
+                                                  </button>
+                                                  <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="comment" creator=${comment.creator} postId=${comment.post_id} wallId=${item.creator} parent=${item.post_id} type="button" class="btn btn-light my-1">
+                                                      delete
+                                                  </button>
+                                              </div>
+                                              <div class="subcommentStart">
+                                              </div>`;
+                          var commentHtml = `<div class=${comment.post_id}>
+                                                <div style="border-radius: 15px" class="card-body bg-light my-2 mx-4 p-3">
+                                                    <h6 id="commentName"><span><img class = \"icon pic${comment.creator}\"src=\"\"></span>${comment.creator_name} <span id="date">${time} </span></h6>
+
+                                                    <p class="m-0">
+                                                        ${comment.content}
+                                                    </p>
+                                                    <br>
+                                                    <input style="padding:4px 10px; line-height:80%;" id=newPost type="text" class="form-control" autocomplete="off" name=${comment.post_id} placeholder="Write a reply..." postType ="subcomment" wallId =${item.creator} receiver=${comment.creator} required>
+                                                    <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                                        post
+                                                    </button>
+                                                    <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="comment" creator=${comment.creator} postId=${comment.post_id} wallId=${item.creator} parent=${item.post_id} type="button" class="btn btn-light my-1">
+                                                        delete
+                                                    </button>
+                                                </div>
+                                                <div class="subcommentStart">
+                                                </div>`;
+
+                          // dynamically adds new comments                      
+                          if (!(postIdList.includes(comment.post_id))) {
+                              postIdList.push(comment.post_id);
+                              var className = "." + item.post_id;
+                              if (!(start)) {
+                                 $( commentHtml ).insertAfter( $(document).find(className).find(".commentStart") );
+                              }
+                          }
+                          // getting all of the subcomments for the comment
+                          comment.children.forEach(function(subcomment, index) {
+                              var a = new Date(subcomment.post_id * 1000);
+                              var months = a.getMonth() + 1;
+                              var year = a.getFullYear();
+                              var date = a.getDate();
+                              var time = months + '/' + date + '/' + year;
+                              var commentHtml = `<div class=${subcomment.post_id}>
+                                                      <div style="border-radius: 15px" class="card-body bg-light my-2 ml-5 mr-4 pt-2">
+                                                          <h6 id="commentName">${subcomment.creator_name} <span id="date">${time} </span></h6>
+
+                                                          <div>
+                                                              ${subcomment.content}
+                                                          </div>
+                                                          <br>
+                                                          <input style="padding:4px 10px; line-height:80%;" id="newPost" type="text" class="form-control input-sm" autocomplete="off" name=${comment.post_id} placeholder="Write a reply..." postType ="subcomment" wallId =${item.creator} receiver =${subcomment.creator} required>
+                                                          <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                                              post
+                                                          </button>
+                                                          <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="subcomment" creator=${subcomment.creator} postId=${subcomment.post_id} wallId=${item.creator} parent=${comment.post_id} type="button" class="btn btn-light my-1">
+                                                              delete
+                                                          </button>
+                                                      </div>
+                                              </div>`;
+                              htmlComment += `<div class=${subcomment.post_id}>
+                                                     <div style="border-radius: 15px" class="card-body bg-light my-2 ml-5 mr-4 pt-2">
+                                                         <h6 id="commentName">${subcomment.creator_name} <span id="date">${time} </span></h6>
+
+                                                         <div>
+                                                             ${subcomment.content}
+                                                         </div>
+                                                         <br>
+                                                         <input style="padding:4px 10px; line-height:80%;" id="newPost" type="text" class="form-control input-sm" autocomplete="off" name=${comment.post_id} placeholder="Write a reply..." postType ="subcomment" wallId =${item.creator} receiver =${subcomment.creator} required>
+                                                         <button style="color: #007BFF; padding: 0.5px 6px; border-radius: 10px; border-color: #BDBCBC;" id="update" class="btn btn-light my-1">
+                                                             post
+                                                         </button>
+                                                         <button style="border-color: #BDBCBC; color: #DC3545; padding: 0.5px 6px; border-radius: 10px;" id="delete" postType="subcomment" creator=${subcomment.creator} postId=${subcomment.post_id} wallId=${item.creator} parent=${comment.post_id} type="button" class="btn btn-light my-1">
+                                                             delete
+                                                         </button>
+                                                     </div>
+                                             </div>`;
+                              // dynamically adds new subcomments
+                              if (!(postIdList.includes(subcomment.post_id))) {
+                                  postIdList.push(subcomment.post_id);
+                                  var className = "." + comment.post_id;
+                                  if (!(start)) {
+                                      $( commentHtml ).insertAfter( $(document).find(className).find(".subcommentStart") );
+                                  }
+                              }
+                          });
+                          htmlComment += "</div>";
+                      });
+
+
+                      html += htmlHeader;
+                      html += htmlContent;
+                      html += htmlCommentCtr;
+                      html += htmlComment;
+                      html += "</div></div></div></div><br></div>";
+                      if (start) {
+                          $(".post").html(html);
+                      }
+                  }
+              });
+              if (start) {
+                  allPostId.forEach(function(item, index) {
+                      postIdList.push(item);
+                  })
+              }
+               start = false;
+           }
+
+        });
+
+        setTimeout(function() {
+            console.log("refreshing...");
+            refreshPage();
+        }, 6000);
+      }
+
+      function searchAction() {
+        var x = document.getElementById("searchbar2").value;
+        if (x !== "") {
+          $.getJSON("/searchSuggestion/" + x, function( items ) {
+                searchResults = items;
+
+                searchResults = searchResults.map((result)=>{
+                     return result = `<li id=${result.username}>${result.fullname}</li>`;
+                 });
+                 wrapper.classList.add("active");
+                 showDropdown(searchResults);
+                 var list = dropBox.querySelectorAll("li");
+                 for (var i = 0; i < list.length; i++) {
+                     list[i].setAttribute("onclick", "select(this)");
+                 }
+             });
+            console.log(x);
+        } else {
+           wrapper.classList.remove("active");
+        }
+      }
+
+      function select(element){
+              var userData = element.textContent;
+              console.log("ID:" + element.id);
+              inputBox.value = userData;
+              var urlLink = "/wall/";
+                 if (userData === "") {
+                      alert("Please enter a name!");
+                 } else {
+                      urlLink = urlLink + element.id;
+                      $('#searchUser').attr('action', urlLink);
+                 }
+              wrapper.classList.remove("active");
+      }
+
+      function showDropdown(list){
+          var data;
+          if(!list.length){
+              userValue = inputBox.value;
+              data = '<li>'+ userValue +'</li>';
+          }else{
+              data = list.join('');
+          }
+          dropBox.innerHTML = data;
+      }
+
+      var loadFile = function(event) {
+        console.log('load file on event');
+        var image = document.getElementById('profilePicture');
+        oldProfilePic = image.src;
+        console.log(event.target.files[0]);
+       image.src = URL.createObjectURL(event.target.files[0]);
+      }
+
+      function incrementCount() {
+        var categories = document.getElementsByClassName("news-category");
+        var count = 0;
+
+        for (var i = 0; i < categories.length; i++) {
+          if (categories[i].checked) {
+            count++;
+          }
+        }
+        if (count > 1) {
+          for (var i = 0; i < categories.length; i++) {
+            categories[i].required = false;
+          }
+        } else {
+          for (var i = 0; i < categories.length; i++) {
+            categories[i].required = true;
+          }
+        }
+      }
+    </script>
+    <style>
+      /*for affiliation info*/
+      h2 {
+        font-size: 14px;
+      }
+
+      #interestsLabel {
+        font-weight:normal;
+      }
+
+      /*for edit profile*/
+      .container {
+        padding: 10em;
+      }
+
+      /*profile info card*/
+      .sidenav {
+        width: 300px;
+        position: fixed;
+        z-index: 1;
+        left: 10%;
+      }
+
+      /*fixes card padding*/
+      .card {
+        padding:0;
+      }
+
+      /*interest buttons*/
+      .interest {
+        margin-bottom: 5px;
+        margin-left: 5px;
+      }
+
+      /*adds space between school and name*/
+      #affiliation {
+        margin-top: 20px;
+      }
+
+      /*profile picture in profile card*/
+      #profilePicture {
+        padding: 10px;
+        margin-bottom: 10px;
+        width: 250px;
+        height: 250px;
+        object-fit: cover;
+      }
+
+      /*positions posts column*/
+      #postsSection {
+        margin-left: 35%;
+      }
+
+      /*edit the user information */
+      #edit {
+        opacity: 0.7;
+        background: rgba(0, 0, 0, 0.959);
+        width: 100%;
+        height: 100%;
+        z-index: 10;
+        top: 0;
+        left: 0;
+        position: fixed;
+        display: none;
+      }
+
+      .newPost {
+            box-shadow: 0 4px 8px 8 rgba(0,0,0,0.2);
+            transition: 0.3s;
+            color: rgb(8, 8, 8);
+            background-color: #fff;
+            padding:20px;
+      }
+
+      #edit_box {
+        position: fixed;
+        top:-10%;
+        left:15%;
+        z-index:12;
+        display: none;
+        height:70%;
+        width: 70%;
+        color:black
+      }
+
+      #edit_private {
+        position: fixed;
+        top:5%;
+        left:15%;
+        z-index:12;
+        display: none;
+        height:70%;
+        width: 70%;
+        color:black
+      }
+
+      /*for profile picture*/
+      #imageContainer{
+        position: fixed;
+        left:15%;
+        z-index:12;
+        display: none;
+        height:100%;
+        width: 100%;
+        color:black
+      }
+
+      /*camera on profile picture*/
+      #camera {
+        position: absolute;
+        left:40%;
+        top: 230px;
+        height: 48px;
+        width: 48px;
+        border-radius: 50%;
+        margin-bottom:30px;
+        text-align: center;
+      }
+
+      /*.btn-circle {
+        width: 15px;
+        height: 15px;
+        text-align: center;
+        padding: 6px 0;
+        font-size: 12px;
+        line-height: 1.42;
+      }*/
+
+      /*creates space between name of wall and profile picture*/
+      #infoname {
+        padding-top: 10px;
+      }
+
+    </style>
+  </head>
+
+<body style="position: relative; z-index: -10000;" class="bg-light">
+    <div id = "edit"></div>
+    <div id = "imageContainer" class="container">
+      <div class="row justify-content-center align-items-center">
+        <div class="col-6">
+          <div class="card">
+            <div class="card-body">
+              <button type="button" id="closePic" onclick="exitcameraOff()" class="close" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+              <h1>Edit Profile Picture</h1>
+              <p class="text-secondary">Choose an image.</p>
+              <p class="text-danger" id="errorMessage"></p>
+              <div class="form-group">
+                <input class="inputfile" type="file" name="file" onchange = "loadFile(event)" id = "file" accept="image/*"/>
+                <label for="file" class="custom-file-upload">
+                 Upload Image
+                </label>
+                <input class="btn btn-outline-primary" type = "button" class = "button" value = "Post" id = "but_upload">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <form id = "editAccount">
+      <div class = "container" id = "edit_private">
+        <div class="row justify-content-center align-items-center">
+          <div class="col-6">
+            <div class="card">
+              <div class="card-body">
+                <button type="button" id="closePriv" onclick="privateOff()" class="close" aria-label="Close">
+                  <span aria-hidden="true">&times;</span>
+                </button>
+                <h1>Edit Account</h1>
+                <form id="private_form">
+                  <div class="form-group">
+                    <input class="form-control" type="text" id="email" name="email" placeholder="Email" required>
+                  </div>
+                  <div class="form-group">
+                    <input class="form-control" type="password" id="password" name="password" placeholder="New Password" required>
+                    <input class="form-control" type = "password" id = "passwordConfirm" name="passwordConfirm" placeholder="Confirm New Password" required>
+                    <div class="form-check text-secondary" id="showPasswordLabel">
+                      <input class="form-check-input" type="checkbox" id="passwordShow" name="passwordShow" onclick="showPassword()">
+                      <label class="form-check-label" for="passwordShow">
+                        Show Password
+                      </label>
+                    </div>
+                  </div>
+                  <div class="form-group form-row">
+                    <input class="btn btn-primary" type="submit" id="privateSubmit" value="Submit">
+                  </div>
+                </form>
+                <% if(locals.error) { %>
+                  <p class="text-danger" id="errorMessage"><%= error %></p>
+                <%} %>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <form id = "editForm">
+    <div class = "container" id='edit_box'>
+      <div class="row justify-content-center align-items-center">
+        <div class="col-6">
+          <div class="card">
+            <div class="card-body">
+              <button type="button" id="closePic" onclick="profileOff()" class="close" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+              <h1>Edit Profile</h1>
+              <p class="text-danger" id="errorMessage"></p>
+              <div class="form-group">
+                <label> School: </label>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="affiliation" id="College of Arts and Sciences" value="College of Arts and Sciences" required>
+                  <label class="form-check-label" for="cas">
+                    College of Arts and Sciences
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="affiliation" id="School of Engineering and Applied Sciences" value="School of Engineering and Applied Sciences">
+                  <label class="form-check-label" for="seas">
+                    School of Engineering and Applied Sciences
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="affiliation" id="Wharton School" value="Wharton School">
+                  <label class="form-check-label" for="wharton">
+                    Wharton School
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="affiliation" id="School of Nursing" value="School of Nursing">
+                  <label class="form-check-label" for="nursing">
+                    School of Nursing
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label> News Categories: <div id="newsError" class="text-secondary">(Please check at least 2 categories)</div></label>
+                <div class="form-check">
+                  <input class="form-check-input news-category" type="checkbox" name="interests" id="politics" value="politics" onclick="incrementCount()" required>
+                  <label class="form-check-label" for="politics">
+                    Politics
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input news-category" type="checkbox" name="interests" id="business" value="business" onclick="incrementCount()" required>
+                  <label class="form-check-label" for="business">
+                    Business
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input news-category" type="checkbox" name="interests" id="science" value="science" onclick="incrementCount()" required>
+                  <label class="form-check-label" for="science">
+                    Science
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input news-category" type="checkbox" name="interests" id="arts" value="arts" onclick="incrementCount()" required>
+                  <label class="form-check-label" for="arts">
+                    Arts
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input news-category" type="checkbox" name="interests" id="entertainment" value="entertainment" onclick="incrementCount()" required>
+                  <label class="form-check-label" for="entertainment">
+                    Entertainment
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input news-category" type="checkbox" name="interests" id="sports" value="sports" onclick="incrementCount()" required>
+                  <label class="form-check-label" for="sports">
+                    Sports
+                  </label>
+                </div>
+              </div>
+
+              <div class = "form-group">
+                <button type="button" onclick="privateOn()" class="btn btn-outline-primary ">Edit Account Info</button>
+                <input class="btn btn-primary float-right" type="submit" id="infoSubmit" value="Save">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <nav style="z-index: 0;" class="navbar navbar-expand-sm fixed-top navbar-dark bg-primary">
+    <a class="navbar-brand" id="logo" href="/">
+      <img src="https://branding.web-resources.upenn.edu/sites/default/files/UniversityofPennsylvania_Shield_RGB.png" width="30px" class="d-inline-block align-top" alt=""> PennBook
+    </a>
+    <div class="wrapper">
+        <div class="search">
+               <form class="form-inline" id="searchUser" action="">
+                <input id="searchbar2" autocomplete="off" list="user-options" onkeyup="searchAction()" class="form-control" type="text" placeholder="Search users..." aria-label="Search">
+               </form>
+               <div class="dropdown">
+               </div>
+        </div>
+    </div>
+    <ul class="navbar-nav ml-md-auto">
+      <li class="nav-item"><a class="nav-link" href="/chat">Chat</a></li>
+      <li class="nav-item"><a class="nav-link" href="/news">News</a></li>
+      <li class="nav-item"><a class="nav-link" href="/friends">Friends</a></li>
+      <li class="nav-item"><a class="nav-link" href="/wall/<%= user %>">Profile</a></li>
+      <li class="nav-item">
+        <form action="/logout">
+          <input class="btn btn-outline-light" type="submit" href="/logout" id="logoutButton" value="Logout">
+        </form>
+      </li>
+    </ul>
+  </nav>
+    <div style="position: relative; z-index: -1;" class="container-fluid">
+      <div class="row" id="content">
+        <div class="card sidenav text-center">
+          <div class="card-body">
+            <div id = "imageBox">
+              <img src = "" id="profilePicture">
+              <button id = "camera" onclick="cameraOn()" class="btn"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" class="bi bi-camera-fill" viewBox="0 0 25 20">
+                <path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
+                <path fill-rule="evenodd" d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2zm.5 2a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1zm9 2.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"/>
+              </svg></button>
+            </div>
+
+            <h1 id = "infoname"></h1>
+            <button id="editButton" class="btn btn-outline-secondary btn-sm btn-block"></button>
+
+            <div class="text-left">
+              <h2 id="affiliation"></h2>
+              <h2 id="interestsLabel">Interests:</h2>
+              <div class="container-fluid" id="buttonsGroup"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6" id="postsSection"> <!--middle-->
+             <div class="card my-3">
+                 <div class="newPost">
+
+
+                 </div>
+             </div>
+             <div class="posts">
+                 <div class="post">
+                    <div class="make2"></div>
+
+                 </div>
+             </div>
+        </div>
+      </div>
+    </div>
+</body>
+</html>
