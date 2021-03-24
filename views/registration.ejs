@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <style>
+
+      body {
+        height:100%;
+        display:grid;
+        justify-items:center;
+        align-items:center;
+        font-family: 'Roboto', sans-serif;
+      }
+
+      .row {
+        height: 100vh;
+      }
+
+      .padding {
+        padding: 0.5em;
+      }
+
+      .tab {
+        display: none;
+      }
+
+      .btn {
+        margin: 0.3em;
+      }
+
+      .invalid {
+        border: 1px solid red;
+      }
+
+      #loginLink {
+        position: relative;
+        top: 1.2em;
+      }
+
+      #errorMessage {
+        color: red;
+        font-weight: bold;
+      }
+
+      #showPasswordLabel {
+        margin-top: 5px;
+      }
+
+    </style>
+  </head>
+<body class="bg-light">
+  <div class="container">
+    <div class="row justify-content-center align-items-center">
+      <div class="col-6">
+        <div class="card">
+          <div class="card-body">
+            <h1>Create an account</h1>
+            <p class="text-secondary">Get started on PennBook today.</p>
+            <p class="text-danger" id="errorMessage"></p>
+            <form action="/createaccount" method="post" id="form">
+              <div class="tab">
+                <div class="form-group">
+                  <label for="fname"> Name: </label>
+                  <div class="form-row">
+                  <div class="col-6">
+                    <input class="form-control" type="text" id="fname" name="fname" placeholder="First Name" required>
+                  </div>
+                  <div class="col-6">
+                    <input class="form-control" type="text" id="lname" name="lname" placeholder="Last Name" required>
+                  </div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="bday"> Email Address: </label>
+                  <input class="form-control" type="email" id="email" name="email" placeholder="Email address" required>
+                </div>
+                <div class="form-group">
+                  <label for="bday"> Birthday: </label>
+                  <input class="form-control" type="date" id="bday" name="bday"required>
+                </div>
+              </div>
+              <div class="tab">
+                <div class="form-group">
+                  <label for="username"> Login: </label>
+                  <input class="form-control" type="text" id="username" name="username" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                  <input class="form-control" type="password" id="password" name="password" placeholder="Password" required>
+                  <div class="form-check text-secondary" id="showPasswordLabel">
+                    <input class="form-check-input" type="checkbox" id="passwordShow" name="passwordShow" onclick="showPassword()">
+                    <label class="form-check-label" for="passwordShow">
+                      Show Password
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="tab">
+                <div class="form-group">
+                  <label> School: </label>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="affiliation" id="cas" value="College of Arts and Sciences" required>
+                    <label class="form-check-label" for="cas">
+                      College of Arts and Sciences
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="affiliation" id="seas" value="School of Engineering and Applied Sciences">
+                    <label class="form-check-label" for="seas">
+                      School of Engineering and Applied Sciences
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="affiliation" id="wharton" value="Wharton School">
+                    <label class="form-check-label" for="wharton">
+                      Wharton School
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="affiliation" id="nursing" value="School of Nursing">
+                    <label class="form-check-label" for="nursing">
+                      School of Nursing
+                    </label>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label> News Categories: <div class="text-secondary">(Please select at least 2)</div></label>
+                  <div class="form-check">
+                    <input class="form-check-input news-category" type="checkbox" name="interests" id="politics" value="politics" onclick="incrementCount()" required>
+                    <label class="form-check-label" for="politics">
+                      Politics
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input news-category" type="checkbox" name="interests" id="business" value="business" onclick="incrementCount()" required>
+                    <label class="form-check-label" for="business">
+                      Business
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input news-category" type="checkbox" name="interests" id="science" value="science" onclick="incrementCount()" required>
+                    <label class="form-check-label" for="science">
+                      Science
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input news-category" type="checkbox" name="interests" id="arts" value="arts" onclick="incrementCount()" required>
+                    <label class="form-check-label" for="arts">
+                      Arts
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input news-category" type="checkbox" name="interests" id="entertainment" value="entertainment" onclick="incrementCount()" required>
+                    <label class="form-check-label" for="entertainment">
+                      Entertainment
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input news-category" type="checkbox" name="interests" id="sports" value="sports" onclick="incrementCount()" required>
+                    <label class="form-check-label" for="sports">
+                      Sports
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <a href="/" id="loginLink">Return to login page</a>
+                <input class="btn btn-primary float-right" type="submit" id="submit" value="Submit">
+                <input class="btn btn-primary float-right" type="button" id="next" value="Next" onclick="switchTab(1)">
+                <input class="btn btn-primary float-right" type="button" id="prev" value="Previous" onclick="switchTab(-1)">
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <% if(locals.error) { %>
+    <div id="errorMessage"><%= error %></div>
+  <%} %>
+
+<script>
+  function showPassword() {
+    var password = document.getElementById("password");
+    console.log("yay");
+    if (password.type === "text") {
+      password.type = "password";
+    } else {
+      password.type = "text";
+    }
+  }
+
+  function incrementCount() {
+    var categories = document.getElementsByClassName("news-category");
+    var count = 0;
+
+    for (var i = 0; i < categories.length; i++) {
+      if (categories[i].checked) {
+        count++;
+      }
+    }
+    if (count >= 2) {
+      for (var i = 0; i < categories.length; i++) {
+        categories[i].required = false;
+      }
+    } else {
+      for (var i = 0; i < categories.length; i++) {
+        categories[i].required = true;
+      }
+    }
+  }
+
+  var current = 0;
+  show(current);
+
+  function show(n) {
+    var tabs = document.getElementsByClassName("tab");
+    tabs[n].style.display = "block";
+
+    if (n == 0) {
+      document.getElementById("prev").style.display = "none";
+      document.getElementById("next").style.display = "inline";
+      document.getElementById("submit").style.display = "none";
+    } else if (n == tabs.length - 1){
+      document.getElementById("prev").style.display = "inline";
+      document.getElementById("submit").style.display = "inline";
+      document.getElementById("next").style.display = "none";
+    } else {
+      document.getElementById("prev").style.display = "inline";
+      document.getElementById("next").style.display = "inline";
+      document.getElementById("submit").style.display = "none";
+    }
+  }
+
+  function switchTab(n) {
+    var tabs = document.getElementsByClassName("tab");
+    var valid = true;
+    var email = /^[A-Z0-9_'%=+!`#~$*?^{}&|-]+([\.][A-Z0-9_'%=+!`#~$*?^{}&|-]+)*@[A-Z0-9-]+(\.[A-Z0-9-]+)+$/i;
+
+    var required = tabs[current].querySelectorAll('[required]');
+    if (n == 1) {
+      for (var i = 0; i < required.length; i++) {
+        if (required[i].value === '' || (required[i].type === "email" && !email.test(required[i].value))) {
+          valid = false;
+          required[i].classList.add("invalid");
+        } else if (required[i].classList.contains("invalid")) {
+          required[i].classList.remove("invalid");
+        }
+      }
+    }
+
+    if (valid) {
+       tabs[current].style.display = "none";
+       current = current + n;
+       if (document.getElementById("errorMessage").innerHTML === "One or more fields have not been filled out properly, please double check the highlighted boxes above.") {
+         document.getElementById("errorMessage").innerHTML = "";
+       }
+    } else {
+      document.getElementById("errorMessage").innerHTML = "One or more fields have not been filled out properly, please double check the highlighted boxes above.";
+    }
+
+    show(current);
+  }
+</script>
+
+</body>
+</html>
